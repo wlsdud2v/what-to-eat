@@ -24,7 +24,10 @@
     ranked: [],
     recs: [],
     selected: 0,
-    userPicked: false,  // 사용자가 카드를 직접 골랐으면 재정렬 후에도 그 메뉴 유지
+    userPicked: false,  // 사용자가 메뉴를 직접 골랐으면 재정렬 후에도 그 메뉴 유지
+    changed: true,      // 히어로 메뉴가 바뀌었는지 (바뀔 때만 등장 애니메이션)
+    season: null,
+    whyOpen: false,
     jitter: new Map(),  // 메뉴별 무작위값 (다시 추천 때만 바뀜)
     kidOnly: loadKid(), // 👶 아이와 함께: 맵거나 날것·술안주 메뉴 빼기 (localStorage 에 기억)
   };
@@ -183,8 +186,8 @@
     state.restaurantsLoading = true;
     mapView.setUser(lat, lon);
     mapView.setView(lat, lon, state.radius > 1000 ? 14 : 15);
-    setCtx("ctx-place", "📍", "위치", "확인 중…");
-    setCtx("ctx-weather", "⏳", "날씨", "불러오는 중…");
+    setPlace("위치 확인 중…");
+    setPill("날씨 불러오는 중…");
 
     const placeP = reverseGeocode(lat, lon).catch(() => ({ label: `${lat.toFixed(4)}, ${lon.toFixed(4)}`, region: "", area: "" }));
     const weatherP = fetchWeather(lat, lon).catch(() => null);
@@ -308,7 +311,7 @@
     const now = new Date();
     const ew = effectiveWeather();
     const season = R.getSeason(now.getMonth() + 1, state.lat ?? 37);
-    setCtx("ctx-season", { spring: "🌸", summer: "🌻", autumn: "🍁", winter: "⛄" }[season], "계절", `${R.SEASON_KO[season]} · ${R.MEAL_KO[state.meal]}`);
+    state.season = season;
 
     state.ranked = R.recommend({
       season,
@@ -328,8 +331,11 @@
     state.recs = R.pickTop(state.ranked, 6);
     if (!opts.keepSelection) state.userPicked = false;
     const keep = opts.keepSelection && state.userPicked ? state.recs.findIndex((r) => r.menu.name === prevName) : -1;
-    state.selected = keep >= 0 ? keep : 0;
+    const next = keep >= 0 ? keep : 0;
+    state.changed = state.recs[next]?.menu.name !== prevName;
+    state.selected = next;
     renderSky();
+    renderContext();
     renderRecs();
     renderPlaces();
     scoreCandidates();
@@ -362,81 +368,280 @@
   }
 
 
-  const SKY_WORD = {
-    clear: "맑은", partly: "구름 조금 낀", cloudy: "흐린", fog: "안개 낀", rain: "비 내리는",
-    storm: "천둥 치는", snow: "눈 내리는", hot: "무더운", cold: "꽁꽁 언",
-  };
-  const SKY_LINE = {
-    clear: "이건 어때요?", partly: "이건 어때요?", cloudy: "따끈한 한 그릇 어때요?", fog: "포근한 한 끼 어때요?",
-    rain: "이런 메뉴가 당기죠", storm: "든든하게 먹고 버텨요", snow: "따뜻한 이거 어때요?",
-    hot: "시원하게 이거 어때요?", cold: "몸 녹일 메뉴예요",
+  /** 해 질 녘: 낮이면서 16시 이후 (저녁 식사 준비할 때쯤 노을 하늘) */
+  function isDusk() {
+    return !isNight() && new Date().getHours() >= 16;
+  }
+
+
+  /** 인사말 첫 단어: 비·눈 같은 하늘이면 하늘, 아니면 체감온도 */
+  function feelWord(kind) {
+    const SKY = { rain: "비 내리는", storm: "천둥 치는", snow: "눈 내리는", fog: "안개 낀", cloudy: "흐린", hot: "무더운", cold: "꽁꽁 언" };
+    if (SKY[kind]) return SKY[kind];
+    if (!state.weather) return "";
+    const f = effectiveWeather().feels;
+    if (f >= 28) return "무더운";
+    if (f >= 22) return "따뜻한";
+    if (f >= 14) return "선선한";
+    if (f >= 4) return "쌀쌀한";
+    return "추운";
+  }
+
+
+  // "이런 메뉴도" 카드 첫 줄
+  const ALT_LINE = {
+    clear: "날씨 좋은 {meal}이에요.", partly: "느긋한 {meal}이에요.", cloudy: "흐린 날엔 따끈한 게 최고죠.",
+    fog: "포근한 한 끼가 생각나요.", rain: "빗소리엔 뜨끈한 게 당기죠.", storm: "이런 날은 든든하게 먹어요.",
+    snow: "눈 오는 날엔 따뜻하게.", hot: "더위엔 시원한 게 최고죠.", cold: "몸 녹일 메뉴가 필요해요.",
   };
   const DAYS = ["일요일", "월요일", "화요일", "수요일", "목요일", "금요일", "토요일"];
 
+  function mealWord() {
+    return isNight() && state.meal === "dinner" ? "밤" : R.MEAL_KO[state.meal];
+  }
+
   function renderSky() {
     const kind = skyKind();
-    const night = isNight();
-    window.Sky.set({ kind, night });
+    window.Sky.set({ kind, night: isNight(), dusk: isDusk() });
+    const word = feelWord(kind);
     const day = DAYS[new Date().getDay()];
-    const meal = night && state.meal === "dinner" ? "밤" : R.MEAL_KO[state.meal];
-    $("#kicker").textContent = state.weather || state.override ? `${SKY_WORD[kind]} ${day} ${meal},` : `${day} ${meal},`;
-    $("#headline").textContent = state.recs.length ? SKY_LINE[kind] : "오늘은 뭐 먹을까요?";
+    $("#kicker").textContent = `${word ? word + " " : ""}${day} ${mealWord()}, 오늘은`;
+    const sel = state.recs[state.selected]?.menu;
+    const line = sel && sel.temp === "hot" && !["hot", "rain", "snow", "storm", "cold"].includes(kind)
+      ? "국물이 당기는 {meal}이에요." : ALT_LINE[kind];
+    $("#alts-line").textContent = `${line.replace("{meal}", mealWord())}\n이런 메뉴도 군침 돌아요.`;
+  }
+
+
+  // ── 그릇 모양 ───────────────────────────────
+  /** 메뉴 → 그릇 종류(bowl 뜨거운 국물 / cold 차가운 그릇 / plate 접시)와 국물 색 */
+  function dishOf(m) {
+    const type = m.temp === "hot" ? "bowl" : m.temp === "cold" ? "cold" : "plate";
+    const t = `${m.name} ${m.desc}`;
+    let broth = "cream";
+    if (/김치|부대|짬뽕|마라|육개장|매운|매콤|얼큰|칼칼|감자탕|닭볶음|떡볶|해장|낙곱새|전골|알탕|동태|대구탕|훠궈|똠|순두부|고추|짬|닭갈비|쭈꾸미|낙지/.test(t)) broth = "red";
+    else if (/된장|청국장|카레|커리|추어|소머리|갈비탕|라멘|우동|국밥|순대국|선지|쌀국수|스튜|짜장|올갱이|시래기|미소|소바/.test(t)) broth = "brown";
+    else if (/설렁|곰탕|사골|삼계|닭곰|칼국수|수제비|떡국|만둣국|백숙|닭한마리|어묵|샤브|굴|재첩|맑은|지리|콩나물/.test(t)) broth = "clear";
+    return { type, broth };
   }
 
 
   // ── 렌더링 ──────────────────────────────────
-  function setCtx(id, ico, small, text) {
-    $(`#${id}`).innerHTML = `<span class="ico">${ico}</span><div><small>${esc(small)}</small><b title="${esc(text)}">${esc(text)}</b></div>`;
+  function setPlace(text) {
+    $("#place-name").textContent = text;
+    $("#loc-val").textContent = text === "위치 확인 중…" ? "" : (state.place?.label || "");
+  }
+
+  function setPill(text) {
+    $("#wx-pill").textContent = text;
   }
 
 
+  const OVERRIDE_KO = { clear: "맑음", rain: "비", snow: "눈", hot: "무더위", cold: "한파" };
+
   function renderContext() {
-    setCtx("ctx-place", "📍", "위치", state.place?.label || "-");
+    const p = state.place;
+    if (p) setPlace(p.area || p.label.split(" ").pop() || p.label);
+    const season = state.season ? R.SEASON_KO[state.season] : "";
     const w = state.weather;
-    if (!w) {
-      setCtx("ctx-weather", "❔", "날씨", "날씨를 못 불러왔어요");
+    if (state.override) {
+      setPill(`${OVERRIDE_KO[state.override]} · 직접 고름${season ? " · " + season : ""}`);
       return;
     }
-    const [desc, ico] = R.describeWeather(w.weatherCode);
-    setCtx("ctx-weather", ico, "날씨", `${desc} ${Math.round(w.temp)}° (체감 ${Math.round(w.feels)}°)`);
+    if (!w) {
+      if (p) setPill(`날씨를 못 불러왔어요${season ? " · " + season : ""}`);
+      return;
+    }
+    const [desc] = R.describeWeather(w.weatherCode);
+    setPill(`${desc} ${Math.round(w.temp)}° · 체감 ${Math.round(w.feels)}°${season ? " · " + season : ""}`);
+  }
+
+
+  /** 근거 목록 (종류 꼬리표 + 문장) */
+  function whyItems(r, n) {
+    return r.reasons.slice(0, n).map((x) =>
+      `<li class="why why-${x.kind}"><span class="tag">${x.icon} ${R.KINDS[x.kind].label}</span>${esc(x.text)}</li>`).join("");
+  }
+
+
+  function lenClass(name) {
+    const n = [...name].length;
+    return n <= 3 ? "s" : n <= 5 ? "m" : n <= 7 ? "l" : "xl";
   }
 
 
   function renderRecs() {
-    const box = $("#recs");
-    if (!state.recs.length) {
+    renderHero();
+    renderAlts();
+    renderDots();
+  }
+
+
+  /** 히어로: 고른 메뉴(기본 1위)를 크게 */
+  function renderHero() {
+    const r = state.recs[state.selected];
+    const h1 = $("#headline");
+    const dish = $("#dish");
+    const acts = $("#hero-actions");
+    if (!r) {
       const why = [];
       if (state.excludeCats.size) why.push("음식 종류");
       if (state.kidOnly) why.push("👶 아이와 함께");
       if (Ex.count()) why.push("🚫 추천 제외 메뉴");
-      box.innerHTML = `<div class="placeholder">조건에 맞는 메뉴가 없어요. ${esc(why.join(" · ") || "설정")}을(를) 다시 확인해 주세요.</div>`;
+      h1.textContent = "오늘 뭐 먹지?";
+      h1.dataset.len = "m";
+      $("#tagline").textContent = state.place
+        ? `조건에 맞는 메뉴가 없어요. ${why.join(" · ") || "설정"}을(를) 다시 확인해 주세요.`
+        : "위치와 날씨를 확인하고 있어요…";
+      $("#hero-chips").innerHTML = "";
+      $("#hero-why").innerHTML = "";
+      $("#dish-emoji").textContent = "🍚";
+      acts.classList.add("placeholder-copy");
+      $("#btn-fav").disabled = $("#btn-ex").disabled = true;
       return;
     }
-    const cards = state.recs.map((r, i) => {
+    acts.classList.remove("placeholder-copy");
+    $("#btn-fav").disabled = $("#btn-ex").disabled = false;
+    const m = r.menu;
+    const fav = Fav.has(m.name);
+
+    h1.innerHTML = esc(m.name) + (fav ? ' <span class="fav-flag">💗 내 최애</span>' : "");
+    h1.dataset.len = lenClass(m.name);
+    $("#tagline").textContent = m.desc;
+    const b = r.basis;
+    $("#hero-chips").innerHTML =
+      `<span class="accent">${b.icon} ${esc(b.label)}</span>` +
+      `<span id="chip-near" hidden></span>` +
+      `<span>${esc(m.cat)}</span>` +
+      (state.kidOnly ? '<span class="kid">👶 아이 OK</span>' : "");
+    $("#hero-why").innerHTML = whyItems(r, 2);
+
+    const fb = $("#btn-fav");
+    fb.classList.toggle("on", fav);
+    fb.setAttribute("aria-pressed", String(fav));
+    fb.title = fb.ariaLabel = fav ? `${m.name} 좋아하는 메뉴에서 빼기` : `${m.name} 좋아하는 메뉴로 등록`;
+    $("#btn-ex").title = `${m.name} 추천에서 빼기`;
+
+    const d = dishOf(m);
+    dish.dataset.type = d.type;
+    dish.dataset.broth = d.broth;
+    $("#dish-emoji").textContent = m.emoji;
+    if (state.changed) {
+      state.changed = false;
+      for (const el of [h1, dish]) {
+        el.classList.remove("pop", "swap");
+        void el.offsetWidth;
+        el.classList.add(el === h1 ? "pop" : "swap");
+      }
+    }
+    renderNear();
+  }
+
+
+  /** 나머지 5개: 작은 그릇 + 점수 곡선 */
+  function renderAlts() {
+    const grid = $("#alt-grid");
+    const others = state.recs.map((r, i) => ({ r, i })).filter((x) => x.i !== state.selected);
+    $("#alts").hidden = !others.length;
+    grid.innerHTML = others.map(({ r, i }, k) => {
       const m = r.menu;
-      // 근거마다 종류 꼬리표(날씨·계절·지역·근처·끼니)를 붙여 왜 추천됐는지 바로 보이게
-      const reasons = r.reasons.slice(0, 3).map((x) =>
-        `<li class="why why-${x.kind}"><span class="tag">${x.icon} ${R.KINDS[x.kind].label}</span>${esc(x.text)}</li>`).join("");
-      const b = r.basis;
+      const d = dishOf(m);
       const fav = Fav.has(m.name);
-      // 카드가 <button> 이라 안쪽 하트는 span(role=button)으로 둠
-      const favBtn = `<span class="fav-btn ${fav ? "on" : ""}" role="button" tabindex="0" aria-pressed="${fav}"
-        data-fav="${esc(m.name)}" title="${fav ? "좋아하는 메뉴에서 빼기" : "좋아하는 메뉴로 등록"}"
-        aria-label="${esc(m.name)} ${fav ? "좋아하는 메뉴에서 빼기" : "좋아하는 메뉴로 등록"}">${fav ? "♥" : "♡"}</span>`;
-      const exBtn = `<span class="ex-btn" role="button" tabindex="0" data-ex="${esc(m.name)}"
-        title="추천에서 빼기" aria-label="${esc(m.name)} 추천에서 빼기">🚫</span>`;
-      return `<button class="rec ${i === 0 ? "top" : ""} ${i === state.selected ? "sel" : ""} ${fav ? "fav" : ""}" data-i="${i}">
-        <span class="rank">${i === 0 ? "오늘의 추천" : `#${i + 1}`}</span>
-        ${favBtn}
-        ${exBtn}
-        <span class="emoji">${m.emoji}</span>
-        <span class="basis basis-${b.kind}">${b.icon} ${esc(b.label)}</span>
-        <div class="name">${esc(m.name)}${fav ? ' <span class="fav-flag">💗 내 최애</span>' : ""}</div>
-        <p class="desc">${esc(m.cat)} · ${esc(m.desc)}${state.kidOnly ? ' <span class="kid-flag">👶 아이 OK</span>' : ""}</p>
-        <ul>${reasons}</ul>
+      return `<button type="button" class="alt ${fav ? "fav" : ""}" data-i="${i}" style="animation-delay:${k * 0.05}s"
+          aria-label="${esc(m.name)} 크게 보기">
+        ${fav ? '<span class="heart" aria-hidden="true">♥</span>' : ""}
+        <span class="disc" data-type="${d.type}" data-broth="${d.type === "plate" ? "" : d.broth}" aria-hidden="true">${m.emoji}</span>
+        <b>${esc(m.name)}</b><small>${esc(m.desc)}</small>
       </button>`;
-    });
-    box.innerHTML = cards[0] + `<div class="rec-row">${cards.slice(1).join("")}</div>`;
+    }).join("");
+    renderCurve(others.map((x) => x.r));
+    renderWhy();
+  }
+
+
+  /** 추천 점수 곡선 (실제 너비로 다시 그려서 글자가 찌그러지지 않게) */
+  function renderCurve(list) {
+    const svg = $("#score-curve");
+    const W = svg.clientWidth || 310;
+    const H = 84;
+    if (!list.length) {
+      svg.innerHTML = "";
+      return;
+    }
+    const scores = list.map((r) => r.score);
+    const hi = Math.max(...scores);
+    const lo = Math.min(...scores);
+    const step = W / list.length;
+    const pts = scores.map((s, k) => ({ x: step * (k + 0.5), y: hi === lo ? 44 : 30 + (hi - s) / (hi - lo) * 40, s }));
+    let d = `M0 ${pts[0].y}`;
+    let px = 0;
+    let py = pts[0].y;
+    for (const p of pts.concat({ x: W, y: pts[pts.length - 1].y })) {
+      const cx = (px + p.x) / 2;
+      d += ` C${cx} ${py} ${cx} ${p.y} ${p.x} ${p.y}`;
+      px = p.x;
+      py = p.y;
+    }
+    svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+    svg.setAttribute("aria-label", "추천 점수: " + list.map((r) => `${r.menu.name} ${r.score.toFixed(1)}`).join(", "));
+    svg.innerHTML = `<path d="${d}" stroke="var(--accent)" stroke-width="2.5" fill="none" />` +
+      pts.map((p) => `<circle cx="${p.x}" cy="${p.y}" r="4.5" fill="var(--cream)" /><text x="${p.x}" y="${p.y - 12}" text-anchor="middle">${p.s.toFixed(1)}</text>`).join("");
+  }
+
+
+  /** 추천 근거 펼쳐 보기: 6개 모두 */
+  function renderWhy() {
+    const box = $("#why-list");
+    box.hidden = !state.whyOpen;
+    $("#btn-why").setAttribute("aria-expanded", String(state.whyOpen));
+    if (!state.whyOpen) return;
+    box.innerHTML = state.recs.map((r, i) =>
+      `<div><div class="wl-name">${i + 1}. ${r.menu.emoji} ${esc(r.menu.name)} <small class="hint">${r.score.toFixed(1)}점</small></div><ul>${whyItems(r, 4)}</ul></div>`).join("");
+  }
+
+
+  function renderDots() {
+    $("#dots").innerHTML = state.recs.map((r, i) =>
+      `<button type="button" class="${i === state.selected ? "on" : ""}" data-i="${i}" aria-label="${i + 1}위 ${esc(r.menu.name)}" aria-pressed="${i === state.selected}"></button>`).join("");
+  }
+
+
+  /** 고른 메뉴를 근처에서 파는 곳 수 (히어로 칩 + 「지금 갈 수 있는 곳」 카드) */
+  function renderNear() {
+    const r = state.recs[state.selected];
+    const num = $("#near-num");
+    const text = $("#near-text");
+    const chip = $("#chip-near");
+    if (!r) {
+      num.textContent = "";
+      text.textContent = "추천 메뉴를 고르면 근처 식당 수를 알려드려요.";
+      return;
+    }
+    const m = r.menu;
+    const short = m.name.split("·")[0];
+    const walk = Math.round(state.radius / 67); // 걸음 속도 약 67m/분
+    const unit = dishOf(m).type === "plate" ? "한 끼" : "한 그릇";
+    const h = state.source === "kakao" ? state.menuHits.get(m.name) : null;
+    const n = state.restaurants === null ? null : nearbyCount(m);
+    const waiting = state.restaurantsLoading || (state.source === "kakao" && !h);
+    if (state.restaurants === null) {
+      num.textContent = "?";
+      text.textContent = "식당 정보를 불러오지 못했어요.\n지도 버튼으로 찾아보세요.";
+    } else if (waiting || !n) {
+      num.textContent = "…";
+      text.textContent = `걸어서 ${walk}분 안에\n${short} ${unit} 찾는 중`;
+    } else if (n.exact > 0) {
+      num.innerHTML = `${n.exact >= 45 && h && !h.complete ? "45+" : n.exact}<small>곳</small>`;
+      text.textContent = `걸어서 ${walk}분 안에\n${short} ${unit}`;
+    } else {
+      num.innerHTML = `0<small>곳</small>`;
+      text.textContent = n.similar ? `${short} 파는 곳은 없지만\n비슷한 식당이 ${n.similar}곳 있어요` : `걸어서 ${walk}분 안에는\n${short} 파는 곳이 없어요`;
+    }
+    if (chip) {
+      const show = !waiting && n && n.exact > 0;
+      chip.hidden = !show;
+      if (show) chip.textContent = `근처 ${n.exact}곳`;
+    }
   }
 
 
@@ -445,17 +650,19 @@
     const rec = state.recs[state.selected];
     mapView.setPlaces([]);
     recipes.setMenu(rec?.menu || null);
+    renderNear();
     if (!rec) {
       list.innerHTML = "";
       return;
     }
     const m = rec.menu;
-    $("#places-title").textContent = `${m.emoji} ${m.name} 먹을 수 있는 곳`;
+    const short = m.name.split("·")[0].trim();
+    $("#places-title").textContent = short.length <= 4 && !short.includes(" ") ? `주변 ${short}집` : `${short} 먹을 수 있는 곳`;
 
-    const kq = encodeURIComponent(`${state.place?.area || ""} ${m.name.split("·")[0]}`.trim());
+    const kq = encodeURIComponent(`${state.place?.area || ""} ${short}`.trim());
     $("#ext-links").innerHTML =
-      `<a class="kakao" href="https://map.kakao.com/link/search/${kq}" target="_blank" rel="noopener">카카오맵</a>` +
-      `<a class="naver" href="https://map.naver.com/p/search/${kq}" target="_blank" rel="noopener">네이버지도</a>`;
+      `<a href="https://map.kakao.com/link/search/${kq}" target="_blank" rel="noopener">카카오맵</a>` +
+      `<a href="https://map.naver.com/p/search/${kq}" target="_blank" rel="noopener">네이버지도</a>`;
 
     if (state.restaurantsLoading) {
       list.innerHTML = '<li class="empty">주변 식당을 찾는 중…</li>';
@@ -493,19 +700,20 @@
     hits = hits.sort((a, b) => b.level - a.level || a.dist - b.dist).slice(0, 45);
 
     if (!hits.length) {
-      list.innerHTML = `<li class="empty">반경 ${state.radius >= 1000 ? state.radius / 1000 + "km" : state.radius + "m"} 안에서 '${esc(m.name)}' 식당을 찾지 못했어요.<br/>반경을 넓히거나 위의 카카오맵·네이버지도 버튼으로 찾아보세요.</li>`;
+      list.innerHTML = `<li class="empty">반경 ${state.radius >= 1000 ? state.radius / 1000 + "km" : state.radius + "m"} 안에서 '${esc(m.name)}' 식당을 찾지 못했어요.<br/>설정에서 반경을 넓히거나 위의 카카오맵·네이버지도로 찾아보세요.</li>`;
       return;
     }
 
     list.innerHTML = hits.map((p) => {
       const t = p.tags;
-      const badge = p.level === 2 ? '<span class="badge hit">메뉴 일치</span>' : '<span class="badge cat">비슷한 종류</span>';
       const d = p.dist < 1000 ? `${Math.round(p.dist)}m` : `${(p.dist / 1000).toFixed(1)}km`;
       const addr = t.addr || [t["addr:street"], t["addr:housenumber"]].filter(Boolean).join(" ");
       const kind = placeKind(t);
-      return `<li class="place" data-id="${esc(p.id)}">
-        <div class="pn">${badge}${esc(t.name)}${kind ? ` <span class="kind">${esc(kind)}</span>` : ""}</div>
-        <div class="meta">🚶 ${d}${addr ? " · " + esc(addr) : ""}${t.phone ? " · ☎ " + esc(t.phone) : ""}${t.opening_hours ? " · ⏰ " + esc(t.opening_hours) : ""}</div>
+      const meta = [kind, `<span class="lv">${p.level === 2 ? "메뉴 일치" : "비슷한 종류"}</span>`, addr && esc(addr), t.phone && "☎ " + esc(t.phone)]
+        .filter(Boolean).map((x, k) => (k === 0 && kind ? esc(x) : x)).join(" · ");
+      return `<li class="place ${p.level === 2 ? "hit" : ""}" data-id="${esc(p.id)}" title="지도에서 보기">
+        <span class="tx"><span class="pn">${esc(t.name)}</span><span class="meta">${meta}</span></span>
+        <span class="dist">${d}</span>
       </li>`;
     }).join("");
 
@@ -541,7 +749,7 @@
 
 
   function renderChips() {
-    $("#cat-chips").innerHTML = CATS.map((c) => `<button class="chip ${state.excludeCats.has(c) ? "off" : ""}" data-cat="${c}">${c}</button>`).join("");
+    $("#cat-chips").innerHTML = CATS.map((c) => `<button type="button" class="chip ${state.excludeCats.has(c) ? "off" : ""}" data-cat="${c}" aria-pressed="${!state.excludeCats.has(c)}">${c}</button>`).join("");
   }
 
 
@@ -549,6 +757,7 @@
     const b = $("#btn-kid");
     b.classList.toggle("on", state.kidOnly);
     b.setAttribute("aria-pressed", String(state.kidOnly));
+    b.title = state.kidOnly ? "아이와 함께: 켜짐 (누르면 끔)" : "아이와 함께 먹기 좋은 메뉴만 추천";
     $("#kid-toggle").checked = state.kidOnly;
   }
 
@@ -568,55 +777,55 @@
 
 
   // ── 이벤트 ──────────────────────────────────
-  /** 카드의 하트: 좋아하는 메뉴 등록/해제 (카드 선택·스크롤은 하지 않음) */
-  function toggleFav(el) {
-    const on = Fav.toggle(el.dataset.fav);
-    toast(on ? `💗 '${el.dataset.fav}'을(를) 좋아하는 메뉴로 등록했어요` : `'${el.dataset.fav}'을(를) 좋아하는 메뉴에서 뺐어요`);
+  /** 히어로 메뉴 바꾸기 (다른 추천·점 누름) */
+  function select(i, { scroll = false } = {}) {
+    if (!state.recs[i]) return;
+    state.changed = i !== state.selected;
+    state.selected = i;
+    state.userPicked = true;
+    recipes.setMenu(state.recs[i].menu, { follow: true });
+    renderSky();
+    renderRecs();
+    renderPlaces();
+    if (scroll) window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  /** 카드의 🚫: 추천 제외 목록에 넣음 (되돌리기 가능, 좋아하는 메뉴였다면 거기서 빠짐) */
-  function excludeMenu(el) {
-    const name = el.dataset.ex;
+  $("#alt-grid").addEventListener("click", (e) => {
+    const b = e.target.closest(".alt");
+    if (b) select(+b.dataset.i, { scroll: true });
+  });
+
+  $("#dots").addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-i]");
+    if (b) select(+b.dataset.i, { scroll: true });
+  });
+
+  $("#btn-why").addEventListener("click", () => {
+    state.whyOpen = !state.whyOpen;
+    renderWhy();
+  });
+
+  // 히어로의 ♡: 좋아하는 메뉴 등록/해제
+  $("#btn-fav").addEventListener("click", () => {
+    const m = state.recs[state.selected]?.menu;
+    if (!m) return;
+    const on = Fav.toggle(m.name);
+    toast(on ? `💗 '${m.name}'을(를) 좋아하는 메뉴로 등록했어요` : `'${m.name}'을(를) 좋아하는 메뉴에서 뺐어요`);
+  });
+
+  // 히어로의 🚫: 추천 제외 (되돌리기 가능, 좋아하는 메뉴였다면 거기서 빠짐)
+  $("#btn-ex").addEventListener("click", () => {
+    const name = state.recs[state.selected]?.menu.name;
+    if (!name) return;
     const r = Ex.add(name);
     if (!r) return;
     const movedFromFav = r.moved;
+    state.changed = true;
     toast(`🚫 '${name}'은(는) 이제 추천하지 않아요`, () => {
       const item = Ex.remove(name);
       if (movedFromFav) Fav.restore(movedFromFav);
       toast(`'${item?.name || name}'을(를) 다시 추천해요`);
     });
-  }
-
-  $("#recs").addEventListener("keydown", (e) => {
-    if (e.key !== "Enter" && e.key !== " ") return;
-    const fb = e.target.closest(".fav-btn");
-    const xb = e.target.closest(".ex-btn");
-    if (!fb && !xb) return;
-    e.preventDefault();
-    fb ? toggleFav(fb) : excludeMenu(xb);
-  });
-
-  $("#recs").addEventListener("click", (e) => {
-    const fb = e.target.closest(".fav-btn");
-    if (fb) {
-      e.preventDefault();
-      toggleFav(fb);
-      return;
-    }
-    const xb = e.target.closest(".ex-btn");
-    if (xb) {
-      e.preventDefault();
-      excludeMenu(xb);
-      return;
-    }
-    const card = e.target.closest(".rec");
-    if (!card) return;
-    state.selected = +card.dataset.i;
-    state.userPicked = true;
-    recipes.setMenu(state.recs[state.selected].menu, { follow: true });
-    renderRecs();
-    renderPlaces();
-    document.querySelector(".places").scrollIntoView({ behavior: "smooth", block: "start" });
   });
 
   $("#place-list").addEventListener("click", (e) => {
@@ -655,20 +864,28 @@
     if (state.lat != null) loadRestaurants();
   });
 
+  // 아래 내비의 돋보기: 위치 검색칸으로
+  $("#nav-search").addEventListener("click", () => setTimeout(() => $("#search-input").focus({ preventScroll: true }), 400));
+
   $("#search-form").addEventListener("submit", async (e) => {
     e.preventDefault();
     const q = $("#search-input").value.trim();
     if (!q) return;
-    setCtx("ctx-place", "🔎", "위치", "검색 중…");
+    setPlace("검색 중…");
     try {
       const pos = await geocode(q);
       if (pos) {
+        $("#search-input").blur();
         setLocation(pos.lat, pos.lon);
         window.scrollTo({ top: 0, behavior: "smooth" });
       }
-      else setCtx("ctx-place", "❔", "위치", `'${q}'을(를) 찾지 못했어요`);
+      else {
+        setPlace(state.place?.area || "위치");
+        toast(`'${q}'을(를) 찾지 못했어요`);
+      }
     } catch {
-      setCtx("ctx-place", "❔", "위치", "검색에 실패했어요");
+      setPlace(state.place?.area || "위치");
+      toast("위치 검색에 실패했어요");
     }
   });
 
@@ -683,7 +900,7 @@
       setLocation(DEFAULT_POS.lat, DEFAULT_POS.lon);
       return;
     }
-    setCtx("ctx-place", "🎯", "위치", "현재 위치 확인 중…");
+    setPlace("현재 위치 확인 중…");
     navigator.geolocation.getCurrentPosition(
       (pos) => setLocation(pos.coords.latitude, pos.coords.longitude),
       () => setLocation(DEFAULT_POS.lat, DEFAULT_POS.lon), // 거부·실패 시 서울시청
@@ -692,13 +909,12 @@
   }
 
 
-  // 좋아하는 메뉴·제외 메뉴가 바뀌면(다른 탭 포함) 카드 강조·추천 목록과 개수 갱신
+  // 좋아하는 메뉴·제외 메뉴가 바뀌면(다른 탭 포함) 강조·추천 목록과 개수 갱신
   function renderFavCount() {
     const n = Fav.count();
     const x = Ex.count();
     $("#fav-count").textContent = n ? String(n) : "";
-    $("#ex-count").textContent = x ? String(x) : "";
-    $("#ex-link").textContent = x ? `🚫 추천 제외 메뉴 관리 (${x}개)` : "🚫 추천 제외 메뉴 관리";
+    $("#ex-count").textContent = x ? `${x}개` : "없음";
   }
 
   Fav.onChange(() => {
@@ -718,6 +934,13 @@
     state.kidOnly = loadKid();
     renderKid();
     if (state.recs.length || state.place) runRecommend({ keepSelection: true });
+  });
+
+  // 점수 곡선은 실제 너비로 그리므로 화면 크기가 바뀌면 다시 그림
+  let resizeTimer;
+  window.addEventListener("resize", () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => renderCurve(state.recs.filter((_, i) => i !== state.selected)), 150);
   });
 
 
@@ -747,5 +970,6 @@
   renderKid();
   renderMeal();
   renderSky();
+  renderRecs();
   locate();
 })();

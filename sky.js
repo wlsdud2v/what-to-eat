@@ -1,4 +1,5 @@
-/* 오늘 뭐 먹지? — 날씨 하늘 배경 (그라데이션·구름·해·달·안개 + 캔버스 비·눈·별) 과 스크롤 전환 */
+/* 오늘 뭐 먹지? — 날씨 하늘 배경 (그라데이션·구름·해·달·안개 + 캔버스 비·눈·별) 과 스크롤 전환
+ * Sky.set({ kind, night, dusk }) — dusk 는 해 질 녘 노을 (맑은 계열 날씨일 때만) */
 (function () {
   const el = document.getElementById("sky");
   const gradBox = el.querySelector(".sky-grads");
@@ -30,22 +31,13 @@
     storm:  "linear-gradient(180deg, #090c11 0%, #161b22 55%, #2a3038 100%)",
     snow:   "linear-gradient(180deg, #19223a 0%, #303e58 55%, #536079 100%)",
   };
-  // 아래쪽 바탕색 (스크롤하면 하늘이 이 색으로 녹아듦)
-  const PAPER = {
-    clear: "#fbf6ef", partly: "#faf6f0", hot: "#fdf3e6", cold: "#f1f6fb",
-    cloudy: "#f3f3f1", fog: "#f2f3f3", rain: "#eef1f4", storm: "#eceef1", snow: "#f3f6f9",
+  // 해 질 녘 (저녁 식사 시간의 맑은 날): 보라 → 분홍 → 주황 노을
+  const DUSK_CLEAR = "linear-gradient(180deg, #4A2F7A 0%, #9A4C82 36%, #D9707A 58%, #F6A35E 72%, #F6A35E 100%)";
+  const DUSK = {
+    clear: DUSK_CLEAR, hot: DUSK_CLEAR,
+    partly: "linear-gradient(180deg, #4d3577 0%, #8f5384 38%, #cf7a7c 60%, #eda466 74%, #eda466 100%)",
+    cold:   "linear-gradient(180deg, #3f3a78 0%, #7a5a8c 40%, #c08390 62%, #e7ac80 76%, #e7ac80 100%)",
   };
-  // 다크 모드 바탕색 (하늘 자체는 다크 모드와 무관하게 그대로)
-  const PAPER_DARK = {
-    clear: "#14181f", partly: "#15181e", hot: "#1a1714", cold: "#131820",
-    cloudy: "#16181b", fog: "#17191b", rain: "#13171b", storm: "#111317", snow: "#151a20",
-  };
-  const darkMq = window.matchMedia("(prefers-color-scheme: dark)");
-  function applyPaper() {
-    if (kind) root.style.setProperty("--bg", (darkMq.matches ? PAPER_DARK : PAPER)[kind]);
-  }
-  if (darkMq.addEventListener) darkMq.addEventListener("change", applyPaper);
-  else if (darkMq.addListener) darkMq.addListener(applyPaper);
 
   // 구름 개수와 색
   const CLOUDS = {
@@ -57,6 +49,7 @@
 
   let kind = null;
   let night = false;
+  let dusk = false;
   let parts = [];
   let W = 0, H = 0;
   let raf = 0;
@@ -67,13 +60,15 @@
   function set(next) {
     const k = DAY[next.kind] ? next.kind : "partly";
     const n = !!next.night;
-    if (k === kind && n === night) return;
+    const d = !n && !!next.dusk && !!DUSK[k];
+    if (k === kind && n === night && d === dusk) return;
     kind = k;
     night = n;
+    dusk = d;
     el.dataset.kind = k;
     el.classList.toggle("night", n);
-    applyPaper();
-    swapGradient((n ? NIGHT : DAY)[k]);
+    el.classList.toggle("dusk", d);
+    swapGradient(n ? NIGHT[k] : d ? DUSK[k] : DAY[k]);
     buildClouds();
     spawn();
     scheduleFlash();
@@ -103,7 +98,7 @@
       const dur = 70 + Math.random() * 80;
       c.className = "cloud";
       c.style.setProperty("--w", `${w}px`);
-      c.style.setProperty("--c", night ? NIGHT_CLOUD[color] || color : color);
+      c.style.setProperty("--c", night ? NIGHT_CLOUD[color] || color : dusk ? "#f6c6b8" : color);
       c.style.setProperty("--o", (alpha * (0.7 + Math.random() * 0.3)).toFixed(2));
       c.style.top = `${-4 + Math.random() * 46}%`;
       c.style.animationDuration = `${dur}s`;

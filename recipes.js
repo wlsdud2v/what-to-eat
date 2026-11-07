@@ -15,10 +15,10 @@
   /** 검색 방식: 검색어 뒤에 붙일 말 */
   const VARIANTS = [
     { id: "", label: "기본" },
-    { id: "간단", label: "⚡ 간단하게" },
-    { id: "황금레시피", label: "⭐ 황금레시피" },
-    { id: "1인분", label: "🍽️ 1인분" },
-    { id: "에어프라이어", label: "🔥 에어프라이어" },
+    { id: "간단", label: "간단하게" },
+    { id: "황금레시피", label: "황금레시피" },
+    { id: "1인분", label: "1인분" },
+    { id: "에어프라이어", label: "에어프라이어" },
   ];
 
   /** 검색 사이트. url(q) 의 q 는 이미 '레시피'가 붙은 검색어(withRecipe) 또는 그냥 검색어 */
@@ -96,8 +96,8 @@
       const base = el.input.value.trim() || menuQuery(state.menu);
       const m = state.menu;
       el.title.textContent = state.custom && base
-        ? `🔎 '${base}' 레시피`
-        : m ? `${m.emoji} ${m.name} 레시피` : "레시피";
+        ? `'${base}' 레시피`
+        : m ? `${m.name}, 집에서 만들어 먹기` : "집에서 만들어 먹기";
       el.reset.hidden = !(state.custom && m);
       if (m) el.reset.textContent = `↺ ${menuQuery(m)}(으)로`;
 
