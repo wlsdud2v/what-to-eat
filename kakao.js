@@ -1,6 +1,6 @@
 /* 오늘 뭐 먹지? — 카카오 로컬(장소 검색) 래퍼
  *
- * 카카오맵 JavaScript SDK 의 services 라이브러리만 사용합니다 (지도는 Leaflet 그대로).
+ * 카카오맵 JavaScript SDK 를 불러오고 services 라이브러리로 장소·주소를 검색합니다 (지도 그리기는 map.js).
  * 결과는 app.js 가 쓰는 공통 형태로 바꿔서 돌려줍니다.
  *   { id, lat, lon, dist, tags: { name, "kakao:category", addr, phone, url } }
  * 위치 검색(geocode)·역지오코딩(reverseGeocode)도 여기서 담당합니다.

@@ -1,7 +1,7 @@
 # 오늘 뭐 먹지? 🍚
 
-현재 위치의 **날씨·계절·지역 특산**과 **점심/저녁**을 반영해 메뉴를 추천하고, 그 메뉴를 파는 **주변 식당을 지도와 목록**으로 보여주는 웹 앱입니다.
-식당 검색·위치 검색·주소 변환은 **카카오 로컬 API**를 쓰고, 카카오 키가 없거나 국외 좌표면 OpenStreetMap 으로 자동 대체됩니다.
+현재 위치의 **날씨·계절·지역 특산**과 **점심/저녁**을 반영해 메뉴를 추천하고, 그 메뉴를 파는 **주변 식당을 카카오맵과 목록**으로 보여주는 웹 앱입니다.
+지도·식당 검색·위치 검색·주소 변환은 모두 **카카오맵 JavaScript SDK**를 쓰고, 카카오 키가 없거나 SDK 를 못 불러오면 OpenStreetMap(Leaflet·Overpass)으로 자동 대체됩니다.
 
 ## 카카오 키 설정
 
@@ -11,7 +11,7 @@
 4. **앱 키 → JavaScript 키**를 `config.js` 의 `window.KAKAO_JS_KEY` 에 붙여넣기 (REST API 키 아님)
 
 JavaScript 키는 등록한 도메인에서만 동작하므로 정적 호스팅에 그대로 올려도 됩니다.
-키가 비어 있거나 SDK 로드·검색이 실패하면 콘솔에 경고를 남기고 Overpass(OSM)로 찾습니다.
+키가 비어 있거나 SDK 로드가 실패하면 콘솔에 경고를 남기고 지도는 Leaflet + OSM 타일(필요할 때만 불러옴), 식당은 Overpass(OSM)로 대체합니다.
 
 ## 실행
 
@@ -42,8 +42,9 @@ python3 -m http.server 8000
 | `recommend.js` | 메뉴 데이터 50여 종 + 추천 점수 로직 (DOM 의존 없음, Node 에서 `require` 가능) |
 | `config.js` | 카카오 JavaScript 키 |
 | `kakao.js` | 카카오 래퍼 (SDK 로드, 카테고리·키워드 검색, 위치 검색 `geocode`, 역지오코딩 `reverseGeocode`) |
+| `map.js` | 지도 래퍼 `MapView`: 카카오맵(내 위치 점·반경 원·식당 점·말풍선), 카카오 불가 시 Leaflet 으로 대체. 준비 전 호출은 기억했다가 반영 |
 | `sky.js` | 날씨 하늘 배경: 날씨·낮밤별 그라데이션, 해·달·구름·안개(CSS), 비·눈·별(캔버스), 스크롤하면 바탕색으로 전환 (`Sky.set({ kind, night })`) |
-| `app.js` | 위치·날씨·식당 검색 흐름, 지도(Leaflet), 렌더링과 이벤트 |
+| `app.js` | 위치·날씨·식당 검색 흐름, 렌더링과 이벤트 (지도는 `MapView` 로만 다룸) |
 
 ## 사용하는 외부 서비스
 
@@ -53,7 +54,7 @@ python3 -m http.server 8000
 | 위치 검색 (주소·역·건물 → 좌표) | **카카오** `Geocoder.addressSearch` → 없으면 `Places.keywordSearch` → 없으면 Nominatim |
 | 좌표 → 동 이름 | **카카오** `coord2RegionCode`·`coord2Address` → 국외·실패 시 Nominatim |
 | 주변 식당 검색 | **카카오 로컬** (Maps JS SDK `services`, JavaScript 키) → 없으면 OSM Overpass API |
-| 지도 | Leaflet + OSM 타일 |
+| 지도 | **카카오맵** (`kakao.maps.Map`) → 없으면 Leaflet + OSM 타일 |
 | 보조 검색 링크 | 카카오맵·네이버지도 검색 URL (`동 이름 + 메뉴`) |
 
 ## 추천 점수 규칙 (`recommend.js` → `recommend()`)

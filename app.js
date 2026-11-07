@@ -32,23 +32,6 @@
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 
-  // ── 지도 ────────────────────────────────────
-  const map = L.map("map", { zoomControl: true }).setView([DEFAULT_POS.lat, DEFAULT_POS.lon], 15);
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    maxZoom: 19,
-    attribution: "&copy; OpenStreetMap contributors",
-  }).addTo(map);
-  const userMarker = L.marker([DEFAULT_POS.lat, DEFAULT_POS.lon], {
-    icon: L.divIcon({ className: "", html: '<div class="user-dot"></div>', iconSize: [22, 22] }),
-    zIndexOffset: 1000,
-  }).addTo(map);
-  const radiusCircle = L.circle([DEFAULT_POS.lat, DEFAULT_POS.lon], { radius: state.radius, color: "#e8590c", weight: 1, fillOpacity: 0.04 }).addTo(map);
-  const placeLayer = L.layerGroup().addTo(map);
-  const markerById = new Map();
-
-  map.on("click", (e) => setLocation(e.latlng.lat, e.latlng.lng));
-
-
   // 카카오 SDK 준비 (키 없음·도메인 미등록이면 false → OSM 사용)
   const kakaoReady = window.KakaoPlaces.init(window.KAKAO_JS_KEY)
     .then(() => true)
@@ -56,6 +39,17 @@
       console.warn("[카카오] 사용 안 함, OpenStreetMap 으로 대체:", e.message);
       return false;
     });
+
+
+  // ── 지도 (카카오맵, 안 되면 Leaflet) ─────────
+  const mapView = window.MapView.create("map", kakaoReady, {
+    center: DEFAULT_POS,
+    zoom: 15,
+    onClick: (lat, lon) => setLocation(lat, lon),
+  });
+  mapView.setUser(DEFAULT_POS.lat, DEFAULT_POS.lon);
+  mapView.setRadius(state.radius);
+  mapView.ready.then(() => { if (state.source) renderSource(); });
 
 
   // ── API ─────────────────────────────────────
@@ -171,9 +165,8 @@
     state.lon = lon;
     state.restaurants = [];
     state.restaurantsLoading = true;
-    userMarker.setLatLng([lat, lon]);
-    radiusCircle.setLatLng([lat, lon]);
-    map.setView([lat, lon], state.radius > 1000 ? 14 : 15);
+    mapView.setUser(lat, lon);
+    mapView.setView(lat, lon, state.radius > 1000 ? 14 : 15);
     setCtx("ctx-place", "📍", "위치", "확인 중…");
     setCtx("ctx-weather", "⏳", "날씨", "불러오는 중…");
 
@@ -414,8 +407,7 @@
   function renderPlaces() {
     const list = $("#place-list");
     const rec = state.recs[state.selected];
-    placeLayer.clearLayers();
-    markerById.clear();
+    mapView.setPlaces([]);
     if (!rec) {
       list.innerHTML = "";
       return;
@@ -480,15 +472,14 @@
       </li>`;
     }).join("");
 
-    for (const p of hits) {
-      const color = p.level === 2 ? "#e8590c" : "#868e96";
-      const mk = L.circleMarker([p.lat, p.lon], { radius: p.level === 2 ? 9 : 6, color: "#fff", weight: 2, fillColor: color, fillOpacity: 0.95 });
+    mapView.setPlaces(hits.map((p) => {
       const kakao = p.tags.url || `https://map.kakao.com/link/search/${encodeURIComponent(p.tags.name)}`;
       const kind = placeKind(p.tags);
-      mk.bindPopup(`<b>${esc(p.tags.name)}</b><br/>${kind ? esc(kind) + "<br/>" : ""}<a href="${esc(kakao)}" target="_blank" rel="noopener">카카오맵에서 보기 →</a>`);
-      mk.addTo(placeLayer);
-      markerById.set(p.id, mk);
-    }
+      return {
+        id: p.id, lat: p.lat, lon: p.lon, strong: p.level === 2, title: p.tags.name,
+        html: `<b>${esc(p.tags.name)}</b><br/>${kind ? esc(kind) + "<br/>" : ""}<a href="${esc(kakao)}" target="_blank" rel="noopener">카카오맵에서 보기 →</a>`,
+      };
+    }));
   }
 
 
@@ -504,9 +495,11 @@
     $("#source-note").textContent = kakao
       ? "식당 정보는 카카오 로컬 검색 기준이에요. 한 메뉴당 가까운 순으로 최대 45곳까지 보여줘요."
       : "식당 정보는 OpenStreetMap 기준이라 누락된 곳이 있을 수 있어요. config.js 에 카카오 키를 넣으면 더 정확해져요.";
-    $("#footer").textContent = kakao
-      ? "날씨 © Open-Meteo · 식당 © Kakao · 지도 © OpenStreetMap contributors"
-      : "날씨 © Open-Meteo · 지도·식당 © OpenStreetMap contributors";
+    const mapBy = mapView.kind === "kakao" ? "Kakao" : "OpenStreetMap contributors";
+    const placeBy = kakao ? "Kakao" : "OpenStreetMap contributors";
+    $("#footer").textContent = mapBy === placeBy
+      ? `날씨 © Open-Meteo · 지도·식당 © ${mapBy}`
+      : `날씨 © Open-Meteo · 식당 © ${placeBy} · 지도 © ${mapBy}`;
   }
 
 
@@ -533,10 +526,7 @@
 
   $("#place-list").addEventListener("click", (e) => {
     const li = e.target.closest(".place");
-    const mk = li && markerById.get(li.dataset.id);
-    if (!mk) return;
-    map.flyTo(mk.getLatLng(), 17, { duration: 0.6 });
-    mk.openPopup();
+    if (li) mapView.focus(li.dataset.id);
   });
 
   $("#btn-reroll").addEventListener("click", () => runRecommend({ reroll: true }));
@@ -564,7 +554,7 @@
 
   $("#radius").addEventListener("change", (e) => {
     state.radius = +e.target.value;
-    radiusCircle.setRadius(state.radius);
+    mapView.setRadius(state.radius);
     if (state.lat != null) loadRestaurants();
   });
 
