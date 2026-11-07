@@ -18,6 +18,8 @@
     place: null,        // { label, region, area }
     weather: null,      // { temp, feels, humidity, wind, weatherCode }
     meal: R.getMeal(new Date().getHours()),
+    mealManual: false,  // 끼니를 직접 골랐는지 (안 골랐으면 새로 고칠 때 시각에 맞춰 바꿈)
+    loadedAt: 0,        // 날씨·식당을 마지막으로 불러온 시각 (ms, 10분 단위 캐시 만료 판단)
     override: "",
     radius: 1000,
     excludeCats: new Set(),
@@ -231,6 +233,7 @@
     if (id !== reqId) return;
     state.place = place;
     state.weather = weather;
+    state.loadedAt = Date.now();
     renderContext();
     runRecommend();
   }
@@ -261,6 +264,92 @@
     state.restaurantsLoading = false;
     renderPlaces();
   }
+
+
+  // ── 캐시 만료 (10분 단위) ───────────────────
+  // 날씨·식당 풀·메뉴별 카카오 검색 결과는 시계 기준 10분 칸(…:00, :10, :20 …)마다 만료.
+  // 칸이 바뀌면 화면을 비우지 않고 뒤에서 새로 불러온 뒤 한 번에 바꿔 끼움.
+  // 탭이 숨겨져 있으면 미뤘다가 다시 보일 때 새로 고침.
+  const CACHE_TTL = 10 * 60 * 1000;
+  const slotOf = (t) => Math.floor(t / CACHE_TTL);
+  let refreshTimer = 0;
+  let refreshing = false;
+
+  function cacheExpired() {
+    return state.loadedAt > 0 && slotOf(state.loadedAt) !== slotOf(Date.now());
+  }
+
+  /** 다음 10분 경계에 맞춰 만료 검사 예약 */
+  function scheduleRefresh() {
+    clearTimeout(refreshTimer);
+    const wait = CACHE_TTL - (Date.now() % CACHE_TTL) + 500; // 경계 직후 (타이머 오차 여유)
+    refreshTimer = setTimeout(() => {
+      if (!document.hidden) refreshData();
+      scheduleRefresh();
+    }, wait);
+  }
+
+  /** 만료된 날씨·식당을 새로 불러와 바꿔 끼움 (실패하면 이전 데이터 유지, 다음 칸에 다시 시도) */
+  async function refreshData() {
+    if (refreshing || state.lat == null || state.restaurantsLoading || !cacheExpired()) return;
+    refreshing = true;
+    const id = reqId;
+    const { lat, lon, radius } = state;
+    const same = () => id === reqId && lat === state.lat && lon === state.lon && radius === state.radius && !state.restaurantsLoading;
+    try {
+      const [weather, rest] = await Promise.all([
+        fetchWeather(lat, lon).catch(() => null),
+        fetchRestaurants(lat, lon, radius).catch(() => null),
+      ]);
+      if (!same()) return; // 그 사이 위치·반경이 바뀌었으면 그쪽 결과가 최신
+      if (!weather && !rest) {
+        console.warn("[캐시] 새로 고침 실패, 이전 데이터 유지");
+        return;
+      }
+
+      // 지금 보고 있는 메뉴의 식당 목록은 미리 받아 두어 "찾는 중" 깜빡임 없이 바꿈
+      const cur = state.recs[state.selected]?.menu;
+      let curHits = null;
+      if (rest?.source === "kakao" && cur) {
+        const pages = window.KakaoPlaces.MAX_PAGES;
+        curHits = await window.KakaoPlaces.searchMenu(cur.kw[0], lat, lon, radius, pages)
+          .then((r) => ({ ...r, pages }), () => null);
+        if (!same()) return;
+      }
+
+      if (weather) state.weather = weather;
+      if (rest) {
+        state.source = rest.source;
+        state.restaurants = rest.list;
+        state.hitsGen++; // 진행 중이던 이전 검색 결과 버림
+        state.menuHits = new Map(curHits ? [[cur.name, curHits]] : []);
+        state.menuHitsP = new Map();
+        state.probed = 0;
+        state.probing = false;
+        renderSource();
+      }
+      state.loadedAt = Date.now();
+
+      // 끼니를 직접 고르지 않았으면 시각에 맞춰 바꿈 (점심 → 저녁이면 추천도 새로)
+      const meal = R.getMeal(new Date().getHours());
+      if (!state.mealManual && meal !== state.meal) {
+        state.meal = meal;
+        renderMeal();
+        runRecommend();
+      } else {
+        // 보고 있던 메뉴는 그대로 두고 점수·근거·식당만 갱신
+        if (state.recs.length) state.userPicked = true;
+        runRecommend({ keepSelection: true });
+      }
+    } finally {
+      refreshing = false;
+    }
+  }
+
+  // 탭이 다시 보이거나 네트워크가 돌아오면 만료 여부 확인
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) refreshData(); });
+  window.addEventListener("online", () => refreshData());
+  window.addEventListener("pageshow", (e) => { if (e.persisted) refreshData(); }); // 뒤로 가기 캐시에서 복원
 
 
   /** 날씨 직접 선택 시 태그와 체감온도 대체 */
@@ -532,6 +621,10 @@
     }
     const [desc] = R.describeWeather(w.weatherCode);
     setPill(`${desc} ${Math.round(w.temp)}° · 체감 ${Math.round(w.feels)}°${season ? " · " + season : ""}`);
+    if (state.loadedAt) {
+      const t = new Date(state.loadedAt);
+      $("#wx-pill").title = `${t.getHours()}:${String(t.getMinutes()).padStart(2, "0")} 기준 · 10분마다 새로 고침`;
+    }
   }
 
 
@@ -980,6 +1073,7 @@
     const b = e.target.closest("button");
     if (!b) return;
     state.meal = b.dataset.meal;
+    state.mealManual = true;
     renderMeal();
     runRecommend();
   });
@@ -1129,4 +1223,5 @@
   renderSky();
   renderRecs();
   locate();
+  scheduleRefresh();
 })();
