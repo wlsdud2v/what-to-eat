@@ -30,6 +30,7 @@
     whyOpen: false,
     jitter: new Map(),  // 메뉴별 무작위값 (다시 추천 때만 바뀜)
     kidOnly: loadKid(), // 👶 아이와 함께: 맵거나 날것·술안주 메뉴 빼기 (localStorage 에 기억)
+    drinkOnly: loadDrink(), // 🍶 반주·안주: 술 한잔 곁들이기 좋은 메뉴만 (localStorage 에 기억)
     lightOnly: loadLight(), // 🥗 가벼운 식사: 국수·죽·김밥·샐러드처럼 부담 없는 메뉴만 (localStorage 에 기억)
   };
 
@@ -45,6 +46,14 @@
   }
   function saveKid(on) {
     try { localStorage.setItem(KID_KEY, on ? "1" : "0"); } catch { /* 저장 못 해도 이번 화면에서는 동작 */ }
+  }
+
+  const DRINK_KEY = "what-to-eat:drink-only:v1";
+  function loadDrink() {
+    try { return localStorage.getItem(DRINK_KEY) === "1"; } catch { return false; }
+  }
+  function saveDrink(on) {
+    try { localStorage.setItem(DRINK_KEY, on ? "1" : "0"); } catch { /* 저장 못 해도 이번 화면에서는 동작 */ }
   }
 
   const LIGHT_KEY = "what-to-eat:light-only:v1";
@@ -332,6 +341,7 @@
       excludeNames: Ex.names(),
       kidOnly: state.kidOnly,
       lightOnly: state.lightOnly,
+      drinkOnly: state.drinkOnly,
       nearby: nearbyCount,
       jitter: (m) => {
         if (!state.jitter.has(m.name)) state.jitter.set(m.name, Math.random());
@@ -498,6 +508,7 @@
       if (state.excludeCats.size) why.push("음식 종류");
       if (state.kidOnly) why.push("👶 아이와 함께");
       if (state.lightOnly) why.push("🥗 가벼운 식사");
+      if (state.drinkOnly) why.push("🍶 반주·안주");
       if (Ex.count()) why.push("🚫 추천 제외 메뉴");
       h1.textContent = "오늘 뭐 먹지?";
       h1.dataset.len = "m";
@@ -525,7 +536,8 @@
       `<span id="chip-near" hidden></span>` +
       `<span>${esc(m.cat)}</span>` +
       (state.kidOnly ? '<span class="kid">👶 아이 OK</span>' : "") +
-      (state.lightOnly ? '<span class="light">🥗 가볍게</span>' : "");
+      (state.lightOnly ? '<span class="light">🥗 가볍게</span>' : "") +
+      (state.drinkOnly ? '<span class="drink">🍶 반주·안주</span>' : "");
     $("#hero-why").innerHTML = whyItems(r, 2);
 
     const fb = $("#btn-fav");
@@ -797,6 +809,20 @@
   }
 
 
+  function renderDrink() {
+    $("#drink-toggle").checked = state.drinkOnly;
+  }
+
+
+  function setDrink(on) {
+    state.drinkOnly = on;
+    saveDrink(on);
+    renderDrink();
+    if (state.recs.length || state.place) runRecommend({ keepSelection: true });
+    toast(on ? "🍶 반주·안주로 어울리는 메뉴만 추천해요" : "반주·안주 필터를 껐어요");
+  }
+
+
   function renderMeal() {
     document.querySelectorAll("#meal-seg button").forEach((b) => b.classList.toggle("on", b.dataset.meal === state.meal));
   }
@@ -863,6 +889,7 @@
   $("#btn-kid").addEventListener("click", () => setKid(!state.kidOnly));
   $("#kid-toggle").addEventListener("change", (e) => setKid(e.target.checked));
   $("#light-toggle").addEventListener("change", (e) => setLight(e.target.checked));
+  $("#drink-toggle").addEventListener("change", (e) => setDrink(e.target.checked));
 
   $("#meal-seg").addEventListener("click", (e) => {
     const b = e.target.closest("button");
@@ -955,7 +982,7 @@
   });
 
 
-  // 다른 탭에서 아이와 함께·가벼운 식사를 바꾸면 따라감
+  // 다른 탭에서 아이와 함께·가벼운 식사·반주를 바꾸면 따라감
   window.addEventListener("storage", (e) => {
     if (e.key === KID_KEY) {
       state.kidOnly = loadKid();
@@ -963,6 +990,9 @@
     } else if (e.key === LIGHT_KEY) {
       state.lightOnly = loadLight();
       renderLight();
+    } else if (e.key === DRINK_KEY) {
+      state.drinkOnly = loadDrink();
+      renderDrink();
     } else return;
     if (state.recs.length || state.place) runRecommend({ keepSelection: true });
   });
@@ -1000,6 +1030,7 @@
   renderChips();
   renderKid();
   renderLight();
+  renderDrink();
   renderMeal();
   renderSky();
   renderRecs();
