@@ -30,6 +30,7 @@
     whyOpen: false,
     jitter: new Map(),  // 메뉴별 무작위값 (다시 추천 때만 바뀜)
     kidOnly: loadKid(), // 👶 아이와 함께: 맵거나 날것·술안주 메뉴 빼기 (localStorage 에 기억)
+    lightOnly: loadLight(), // 🥗 가벼운 식사: 국수·죽·김밥·샐러드처럼 부담 없는 메뉴만 (localStorage 에 기억)
   };
 
   const Fav = window.Favorites;
@@ -44,6 +45,14 @@
   }
   function saveKid(on) {
     try { localStorage.setItem(KID_KEY, on ? "1" : "0"); } catch { /* 저장 못 해도 이번 화면에서는 동작 */ }
+  }
+
+  const LIGHT_KEY = "what-to-eat:light-only:v1";
+  function loadLight() {
+    try { return localStorage.getItem(LIGHT_KEY) === "1"; } catch { return false; }
+  }
+  function saveLight(on) {
+    try { localStorage.setItem(LIGHT_KEY, on ? "1" : "0"); } catch { /* 저장 못 해도 이번 화면에서는 동작 */ }
   }
 
 
@@ -322,6 +331,7 @@
       excludeCats: state.excludeCats,
       excludeNames: Ex.names(),
       kidOnly: state.kidOnly,
+      lightOnly: state.lightOnly,
       nearby: nearbyCount,
       jitter: (m) => {
         if (!state.jitter.has(m.name)) state.jitter.set(m.name, Math.random());
@@ -487,6 +497,7 @@
       const why = [];
       if (state.excludeCats.size) why.push("음식 종류");
       if (state.kidOnly) why.push("👶 아이와 함께");
+      if (state.lightOnly) why.push("🥗 가벼운 식사");
       if (Ex.count()) why.push("🚫 추천 제외 메뉴");
       h1.textContent = "오늘 뭐 먹지?";
       h1.dataset.len = "m";
@@ -513,7 +524,8 @@
       `<span class="accent">${b.icon} ${esc(b.label)}</span>` +
       `<span id="chip-near" hidden></span>` +
       `<span>${esc(m.cat)}</span>` +
-      (state.kidOnly ? '<span class="kid">👶 아이 OK</span>' : "");
+      (state.kidOnly ? '<span class="kid">👶 아이 OK</span>' : "") +
+      (state.lightOnly ? '<span class="light">🥗 가볍게</span>' : "");
     $("#hero-why").innerHTML = whyItems(r, 2);
 
     const fb = $("#btn-fav");
@@ -771,6 +783,20 @@
   }
 
 
+  function renderLight() {
+    $("#light-toggle").checked = state.lightOnly;
+  }
+
+
+  function setLight(on) {
+    state.lightOnly = on;
+    saveLight(on);
+    renderLight();
+    if (state.recs.length || state.place) runRecommend({ keepSelection: true });
+    toast(on ? "🥗 가볍게 먹기 좋은 메뉴만 추천해요" : "가벼운 식사 필터를 껐어요");
+  }
+
+
   function renderMeal() {
     document.querySelectorAll("#meal-seg button").forEach((b) => b.classList.toggle("on", b.dataset.meal === state.meal));
   }
@@ -836,6 +862,7 @@
   $("#btn-reroll").addEventListener("click", () => runRecommend({ reroll: true }));
   $("#btn-kid").addEventListener("click", () => setKid(!state.kidOnly));
   $("#kid-toggle").addEventListener("change", (e) => setKid(e.target.checked));
+  $("#light-toggle").addEventListener("change", (e) => setLight(e.target.checked));
 
   $("#meal-seg").addEventListener("click", (e) => {
     const b = e.target.closest("button");
@@ -928,11 +955,15 @@
   });
 
 
-  // 다른 탭에서 아이와 함께를 바꾸면 따라감
+  // 다른 탭에서 아이와 함께·가벼운 식사를 바꾸면 따라감
   window.addEventListener("storage", (e) => {
-    if (e.key !== KID_KEY) return;
-    state.kidOnly = loadKid();
-    renderKid();
+    if (e.key === KID_KEY) {
+      state.kidOnly = loadKid();
+      renderKid();
+    } else if (e.key === LIGHT_KEY) {
+      state.lightOnly = loadLight();
+      renderLight();
+    } else return;
     if (state.recs.length || state.place) runRecommend({ keepSelection: true });
   });
 
@@ -968,6 +999,7 @@
   renderFavCount();
   renderChips();
   renderKid();
+  renderLight();
   renderMeal();
   renderSky();
   renderRecs();
