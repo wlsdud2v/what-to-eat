@@ -68,7 +68,7 @@
 
   async function fetchWeather(lat, lon) {
     const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
-      "&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m&timezone=auto";
+      "&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,is_day&timezone=auto";
     const j = await fetchJson(url);
     const c = j.current;
     return {
@@ -77,6 +77,7 @@
       humidity: c.relative_humidity_2m,
       wind: c.wind_speed_10m,
       weatherCode: c.weather_code,
+      isDay: c.is_day,
     };
   }
 
@@ -316,9 +317,58 @@
     if (!opts.keepSelection) state.userPicked = false;
     const keep = opts.keepSelection && state.userPicked ? state.recs.findIndex((r) => r.menu.name === prevName) : -1;
     state.selected = keep >= 0 ? keep : 0;
+    renderSky();
     renderRecs();
     renderPlaces();
     scoreCandidates();
+  }
+
+
+  // ── 하늘·인사말 ─────────────────────────────
+  /** 지금 하늘 종류 (날씨 직접 선택 우선) */
+  function skyKind() {
+    const o = state.override;
+    if (o) return o; // clear | rain | snow | hot | cold
+    const w = state.weather;
+    if (!w) return "partly";
+    const c = w.weatherCode;
+    if (c >= 95) return "storm";
+    if ((c >= 71 && c <= 77) || c === 85 || c === 86) return "snow";
+    if ((c >= 51 && c <= 67) || (c >= 80 && c <= 82)) return "rain";
+    if (c === 45 || c === 48) return "fog";
+    if (c === 3) return "cloudy";
+    if (w.feels >= 30) return "hot";
+    if (w.feels <= -5) return "cold";
+    return c === 0 ? "clear" : "partly";
+  }
+
+
+  function isNight() {
+    if (state.weather && state.weather.isDay != null) return state.weather.isDay === 0;
+    const h = new Date().getHours();
+    return h < 6 || h >= 19;
+  }
+
+
+  const SKY_WORD = {
+    clear: "맑은", partly: "구름 조금 낀", cloudy: "흐린", fog: "안개 낀", rain: "비 내리는",
+    storm: "천둥 치는", snow: "눈 내리는", hot: "무더운", cold: "꽁꽁 언",
+  };
+  const SKY_LINE = {
+    clear: "이건 어때요?", partly: "이건 어때요?", cloudy: "따끈한 한 그릇 어때요?", fog: "포근한 한 끼 어때요?",
+    rain: "이런 메뉴가 당기죠", storm: "든든하게 먹고 버텨요", snow: "따뜻한 이거 어때요?",
+    hot: "시원하게 이거 어때요?", cold: "몸 녹일 메뉴예요",
+  };
+  const DAYS = ["일요일", "월요일", "화요일", "수요일", "목요일", "금요일", "토요일"];
+
+  function renderSky() {
+    const kind = skyKind();
+    const night = isNight();
+    window.Sky.set({ kind, night });
+    const day = DAYS[new Date().getDay()];
+    const meal = night && state.meal === "dinner" ? "밤" : R.MEAL_KO[state.meal];
+    $("#kicker").textContent = state.weather || state.override ? `${SKY_WORD[kind]} ${day} ${meal},` : `${day} ${meal},`;
+    $("#headline").textContent = state.recs.length ? SKY_LINE[kind] : "오늘은 뭐 먹을까요?";
   }
 
 
@@ -343,10 +393,10 @@
   function renderRecs() {
     const box = $("#recs");
     if (!state.recs.length) {
-      box.innerHTML = '<div class="placeholder">모든 분류를 제외했어요. 아래 칩을 다시 켜 주세요.</div>';
+      box.innerHTML = '<div class="placeholder">모든 분류를 제외했어요. 아래 설정에서 음식 종류를 다시 켜 주세요.</div>';
       return;
     }
-    box.innerHTML = state.recs.map((r, i) => {
+    const cards = state.recs.map((r, i) => {
       const m = r.menu;
       const reasons = r.reasons.slice(0, 3).map((t) => `<li>${esc(t)}</li>`).join("");
       return `<button class="rec ${i === 0 ? "top" : ""} ${i === state.selected ? "sel" : ""}" data-i="${i}">
@@ -356,7 +406,8 @@
         <p class="desc">${esc(m.cat)} · ${esc(m.desc)}</p>
         <ul>${reasons}</ul>
       </button>`;
-    }).join("");
+    });
+    box.innerHTML = cards[0] + `<div class="rec-row">${cards.slice(1).join("")}</div>`;
   }
 
 
@@ -524,14 +575,20 @@
     setCtx("ctx-place", "🔎", "위치", "검색 중…");
     try {
       const pos = await geocode(q);
-      if (pos) setLocation(pos.lat, pos.lon);
+      if (pos) {
+        setLocation(pos.lat, pos.lon);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
       else setCtx("ctx-place", "❔", "위치", `'${q}'을(를) 찾지 못했어요`);
     } catch {
       setCtx("ctx-place", "❔", "위치", "검색에 실패했어요");
     }
   });
 
-  $("#btn-locate").addEventListener("click", locate);
+  $("#btn-locate").addEventListener("click", () => {
+    locate();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  });
 
 
   function locate() {
@@ -551,5 +608,6 @@
   // ── 시작 ────────────────────────────────────
   renderChips();
   renderMeal();
+  renderSky();
   locate();
 })();

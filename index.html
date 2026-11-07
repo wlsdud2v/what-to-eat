@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>오늘 뭐 먹지?</title>
   <link rel="icon" type="image/svg+xml" href="icon/icon.svg" />
   <link rel="icon" type="image/png" sizes="128x128" href="icon/icon_128.png" />
@@ -13,26 +13,71 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <header class="top">
-    <h1>오늘 뭐 먹지? <span class="bowl">🍚</span></h1>
-    <p class="sub">지금 있는 곳의 날씨와 계절에 맞춰 메뉴를 고르고, 근처 식당을 찾아드려요.</p>
-  </header>
+  <!-- 날씨 하늘 배경 (고정, 스크롤하면 바탕색으로 녹아듦) -->
+  <div id="sky" aria-hidden="true">
+    <div class="sky-grads"></div>
+    <div class="sky-sun"><div class="rays"></div></div>
+    <div class="sky-moon"></div>
+    <div class="sky-clouds"></div>
+    <div class="sky-fog"></div>
+    <canvas></canvas>
+    <div class="sky-flash"></div>
+  </div>
 
-  <main>
-    <!-- 현재 상황 -->
-    <section class="card context">
+  <!-- 히어로: 날씨 + 추천 메뉴 -->
+  <header class="hero">
+    <nav class="hero-top">
+      <span class="brand">오늘 뭐 먹지? <span class="bowl">🍚</span></span>
+      <a class="hero-link" href="#settings">📍 위치·설정</a>
+    </nav>
+
+    <div class="hero-head">
       <div class="ctx-row">
         <div class="ctx-item" id="ctx-place"><span class="ico">📍</span><div><small>위치</small><b>확인 중…</b></div></div>
         <div class="ctx-item" id="ctx-weather"><span class="ico">⏳</span><div><small>날씨</small><b>불러오는 중…</b></div></div>
         <div class="ctx-item" id="ctx-season"><span class="ico">🗓️</span><div><small>계절</small><b>-</b></div></div>
       </div>
+      <p class="kicker" id="kicker">&nbsp;</p>
+      <h1 id="headline">오늘은 뭐 먹을까요?</h1>
+    </div>
 
+    <section class="recs-wrap" aria-label="추천 메뉴">
+      <div id="recs" class="recs"><div class="placeholder">위치와 날씨를 확인하고 있어요…</div></div>
+      <div class="recs-actions">
+        <button id="btn-reroll" class="glass-btn">🎲 다시 추천</button>
+        <span class="hint">카드를 누르면 근처 식당을 보여줘요</span>
+      </div>
+    </section>
+
+    <a class="scroll-cue" href="#places" aria-label="주변 식당 보기"><span></span></a>
+  </header>
+
+  <main class="below">
+    <!-- 주변 식당 -->
+    <section class="card places" id="places">
+      <div class="sec-head">
+        <h2 id="places-title">주변 식당</h2>
+        <div class="ext" id="ext-links"></div>
+      </div>
+      <div class="places-body">
+        <div id="map"></div>
+        <ul id="place-list" class="place-list"></ul>
+      </div>
+      <p class="note" id="source-note">식당 정보는 OpenStreetMap 기준이라 누락된 곳이 있을 수 있어요. 더 많은 결과는 카카오맵·네이버지도 버튼으로 확인하세요.</p>
+    </section>
+
+    <!-- 검색·추천 설정 -->
+    <section class="card settings" id="settings">
+      <div class="sec-head"><h2>검색 · 추천 설정</h2></div>
+
+      <label class="field-label" for="search-input">위치</label>
       <form id="search-form" class="search">
         <input id="search-input" type="search" placeholder="동네·주소·역 이름으로 위치 바꾸기 (예: 강남역, 해운대)" />
         <button type="submit">검색</button>
         <button type="button" id="btn-locate" title="현재 위치">🎯</button>
       </form>
 
+      <div class="field-label">끼니 · 날씨 · 반경</div>
       <div class="options">
         <div class="seg" id="meal-seg">
           <button data-meal="lunch">☀️ 점심</button>
@@ -52,29 +97,9 @@
           <option value="2000">반경 2km</option>
         </select>
       </div>
+
+      <div class="field-label">음식 종류 <small>(눌러서 제외)</small></div>
       <div class="chips" id="cat-chips"></div>
-    </section>
-
-    <!-- 추천 메뉴 -->
-    <section>
-      <div class="sec-head">
-        <h2>추천 메뉴</h2>
-        <button id="btn-reroll" class="ghost">🎲 다시 추천</button>
-      </div>
-      <div id="recs" class="recs"><div class="placeholder">위치와 날씨를 확인하고 있어요…</div></div>
-    </section>
-
-    <!-- 주변 식당 -->
-    <section class="card places">
-      <div class="sec-head">
-        <h2 id="places-title">주변 식당</h2>
-        <div class="ext" id="ext-links"></div>
-      </div>
-      <div class="places-body">
-        <div id="map"></div>
-        <ul id="place-list" class="place-list"></ul>
-      </div>
-      <p class="note" id="source-note">식당 정보는 OpenStreetMap 기준이라 누락된 곳이 있을 수 있어요. 더 많은 결과는 카카오맵·네이버지도 버튼으로 확인하세요.</p>
     </section>
   </main>
 
@@ -84,6 +109,7 @@
   <script src="config.js"></script>
   <script src="recommend.js"></script>
   <script src="kakao.js"></script>
+  <script src="sky.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
