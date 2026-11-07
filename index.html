@@ -88,6 +88,7 @@
           <span class="pill" id="wx-pill">날씨 불러오는 중…</span>
         </div>
         <div class="top-btns">
+          <button type="button" id="btn-near" class="round-btn near-btn" aria-pressed="false" title="지금 근처 식당에서 파는 메뉴만 추천" aria-label="근처 식당 메뉴만">📍</button>
           <button type="button" id="btn-kid" class="round-btn kid-btn" aria-pressed="false" title="아이와 함께 먹기 좋은 메뉴만 추천" aria-label="아이와 함께">👶</button>
           <a class="round-btn" href="favorites.html" title="내 메뉴 관리 (좋아하는 메뉴·추천 제외)" aria-label="내 메뉴 관리">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z" /></svg>
@@ -226,6 +227,11 @@
         <span class="row-label">음식 종류 <small>눌러서 빼기</small></span>
         <div class="chips" id="cat-chips"></div>
       </div>
+      <label class="row switch">
+        <span class="row-label">📍 근처 식당 메뉴만 <small>반경 안 식당에서 파는 메뉴만, 가까운 곳 위주로 추천 (여행지에서 좋아요)</small></span>
+        <input type="checkbox" id="near-toggle" />
+        <span class="track" aria-hidden="true"></span>
+      </label>
       <label class="row switch">
         <span class="row-label">아이와 함께 <small>맵거나 날것·술안주 메뉴는 빼고 추천</small></span>
         <input type="checkbox" id="kid-toggle" />

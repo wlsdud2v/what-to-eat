@@ -6,6 +6,12 @@
   const NOMINATIM = "https://nominatim.openstreetmap.org";
   const CATS = ["한식", "중식", "일식", "양식", "분식", "아시안"];
 
+  // 설정 저장 키 (state 를 만들 때 바로 읽으므로 state 보다 먼저 선언)
+  const KID_KEY = "what-to-eat:kid-only:v1";
+  const DRINK_KEY = "what-to-eat:drink-only:v1";
+  const LIGHT_KEY = "what-to-eat:light-only:v1";
+  const NEAR_KEY = "what-to-eat:near-only:v1";
+
   const state = {
     lat: null,
     lon: null,
@@ -32,6 +38,10 @@
     kidOnly: loadKid(), // 👶 아이와 함께: 맵거나 날것·술안주 메뉴 빼기 (localStorage 에 기억)
     drinkOnly: loadDrink(), // 🍶 반주·안주: 술 한잔 곁들이기 좋은 메뉴만 (localStorage 에 기억)
     lightOnly: loadLight(), // 🥗 가벼운 식사: 국수·죽·김밥·샐러드처럼 부담 없는 메뉴만 (localStorage 에 기억)
+    nearOnly: loadNear(),   // 📍 근처 식당 메뉴만: 반경 안 식당에서 파는 게 확인된 메뉴만 (localStorage 에 기억)
+    pool: [],               // 근처 식당 메뉴만일 때 필터 전 순위 (카카오 키워드 검색할 후보 고르기용)
+    probed: 0,              // 근처 식당 메뉴만일 때 이번 위치·반경에서 키워드 검색한 메뉴 수
+    probing: false,         // 근처 식당 메뉴만일 때 후보 키워드 검색 중
   };
 
   const Fav = window.Favorites;
@@ -40,7 +50,6 @@
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 
-  const KID_KEY = "what-to-eat:kid-only:v1";
   function loadKid() {
     try { return localStorage.getItem(KID_KEY) === "1"; } catch { return false; }
   }
@@ -48,7 +57,6 @@
     try { localStorage.setItem(KID_KEY, on ? "1" : "0"); } catch { /* 저장 못 해도 이번 화면에서는 동작 */ }
   }
 
-  const DRINK_KEY = "what-to-eat:drink-only:v1";
   function loadDrink() {
     try { return localStorage.getItem(DRINK_KEY) === "1"; } catch { return false; }
   }
@@ -56,12 +64,19 @@
     try { localStorage.setItem(DRINK_KEY, on ? "1" : "0"); } catch { /* 저장 못 해도 이번 화면에서는 동작 */ }
   }
 
-  const LIGHT_KEY = "what-to-eat:light-only:v1";
   function loadLight() {
     try { return localStorage.getItem(LIGHT_KEY) === "1"; } catch { return false; }
   }
   function saveLight(on) {
     try { localStorage.setItem(LIGHT_KEY, on ? "1" : "0"); } catch { /* 저장 못 해도 이번 화면에서는 동작 */ }
+  }
+
+
+  function loadNear() {
+    try { return localStorage.getItem(NEAR_KEY) === "1"; } catch { return false; }
+  }
+  function saveNear(on) {
+    try { localStorage.setItem(NEAR_KEY, on ? "1" : "0"); } catch { /* 저장 못 해도 이번 화면에서는 동작 */ }
   }
 
 
@@ -225,7 +240,10 @@
     state.hitsGen++;
     state.menuHits = new Map();
     state.menuHitsP = new Map();
-    renderPlaces();
+    state.probed = 0;
+    state.probing = false;
+    if (state.nearOnly && state.recs.length) runRecommend({ keepSelection: true }); // 이전 위치 메뉴 지우고 "찾는 중" 표시
+    else renderPlaces();
     try {
       const { source, list } = await fetchRestaurants(state.lat, state.lon, state.radius);
       if (id !== reqId) return;
@@ -292,34 +310,63 @@
 
   /** 상위 후보 메뉴들을 카카오 키워드로 검색해 "근처에 파는 곳" 점수를 정확하게 → 다시 정렬 */
   const SCORE_TOP = 12;
+  const NEAR_PROBE_MAX = 72; // 근처 식당 메뉴만: 위치·반경당 키워드 검색 최대 메뉴 수
   function scoreCandidates() {
     if (state.source !== "kakao" || state.restaurantsLoading || !state.restaurants) return;
-    // 화면 카드처럼 분류를 섞어 후보를 고름 (분류당 최대 4개)
-    const todo = R.pickTop(state.ranked, SCORE_TOP, 4).map((r) => r.menu)
-      .filter((m) => !state.menuHits.has(m.name) && !state.menuHitsP.has(m.name));
+    const unknown = (m) => !state.menuHits.has(m.name) && !state.menuHitsP.has(m.name);
+    let todo;
+    if (state.nearOnly) {
+      // 필터 전 순위에서 아직 확인 안 한 메뉴를 분류를 섞어 12개씩 검색.
+      // 상위 12개는 항상 확인하고, 그 뒤로는 화면에 6개가 찰 때까지 더 내려가며 찾음
+      const rest = state.pool.filter((r) => unknown(r.menu));
+      const needMore = state.recs.length < 6 || R.pickTop(state.pool, SCORE_TOP, 4).some((r) => unknown(r.menu));
+      if (state.probing || !needMore || state.probed >= NEAR_PROBE_MAX) return; // 검색 중이면 끝난 뒤 다시 정렬하면서 이어서 부름
+      todo = R.pickTop(rest, SCORE_TOP, 4).map((r) => r.menu);
+      state.probed += todo.length;
+      state.probing = todo.length > 0;
+    } else {
+      // 화면 카드처럼 분류를 섞어 후보를 고름 (분류당 최대 4개)
+      todo = R.pickTop(state.ranked, SCORE_TOP, 4).map((r) => r.menu).filter(unknown);
+    }
     if (!todo.length) return;
     const gen = state.hitsGen;
     Promise.all(todo.map((m) => menuHits(m, 1))).then(() => {
-      if (gen === state.hitsGen) runRecommend({ keepSelection: true });
+      if (gen !== state.hitsGen) return;
+      state.probing = false;
+      runRecommend({ keepSelection: true });
     }, () => {});
   }
 
 
+  /** 근처 식당 메뉴만인데 아직 확인 중인지 (빈 화면 대신 "찾는 중" 표시용) */
+  function nearSearching() {
+    if (!state.nearOnly || state.restaurants === null) return false;
+    if (state.restaurantsLoading || !state.place) return true;
+    return state.source === "kakao" && state.probing;
+  }
+
+
+  /** 메뉴를 근처에서 파는 곳 수 { exact, similar, nearest(가장 가까운 메뉴 일치 식당까지 m) } */
   function nearbyCount(menu) {
     if (!state.restaurants || state.restaurantsLoading) return null;
     let similar = 0;
+    let nearest = null;
     const exactIds = new Set();
+    const hit = (p) => {
+      exactIds.add(p.id);
+      if (p.dist != null && (nearest == null || p.dist < nearest)) nearest = p.dist;
+    };
     for (const p of state.restaurants) {
       const lv = R.matchRestaurant(menu, p.tags);
-      if (lv === 2) exactIds.add(p.id);
+      if (lv === 2) hit(p);
       else if (lv === 1) similar++;
     }
     const h = state.source === "kakao" ? state.menuHits.get(menu.name) : null;
     if (h && !h.failed) {
-      for (const p of h.items) exactIds.add(p.id);
-      return { exact: Math.max(h.total, exactIds.size), similar };
+      for (const p of h.items) hit(p);
+      return { exact: Math.max(h.total, exactIds.size), similar, nearest };
     }
-    return { exact: exactIds.size, similar };
+    return { exact: exactIds.size, similar, nearest };
   }
 
 
@@ -331,7 +378,8 @@
     const season = R.getSeason(now.getMonth() + 1, state.lat ?? 37);
     state.season = season;
 
-    state.ranked = R.recommend({
+    const nearMemo = new Map(); // 이번 계산 동안 메뉴별 근처 식당 수 재사용
+    const ctx = {
       season,
       meal: state.meal,
       tags: ew.tags,
@@ -342,12 +390,20 @@
       kidOnly: state.kidOnly,
       lightOnly: state.lightOnly,
       drinkOnly: state.drinkOnly,
-      nearby: nearbyCount,
+      nearOnly: state.nearOnly,
+      radius: state.radius,
+      nearby: (m) => {
+        if (!nearMemo.has(m.name)) nearMemo.set(m.name, nearbyCount(m));
+        return nearMemo.get(m.name);
+      },
       jitter: (m) => {
         if (!state.jitter.has(m.name)) state.jitter.set(m.name, Math.random());
         return state.jitter.get(m.name);
       },
-    });
+    };
+    state.ranked = R.recommend(ctx);
+    // 근처 식당 메뉴만: 아직 키워드 검색 안 한 메뉴도 후보로 고를 수 있게 필터 전 순위를 따로 둠
+    state.pool = state.nearOnly ? R.recommend({ ...ctx, nearOnly: false }) : [];
     state.recs = R.pickTop(state.ranked, 6);
     if (!opts.keepSelection) state.userPicked = false;
     const keep = opts.keepSelection && state.userPicked ? state.recs.findIndex((r) => r.menu.name === prevName) : -1;
@@ -509,12 +565,17 @@
       if (state.kidOnly) why.push("👶 아이와 함께");
       if (state.lightOnly) why.push("🥗 가벼운 식사");
       if (state.drinkOnly) why.push("🍶 반주·안주");
+      if (state.nearOnly) why.push("📍 근처 식당 메뉴만 · 반경");
       if (Ex.count()) why.push("🚫 추천 제외 메뉴");
       h1.textContent = "오늘 뭐 먹지?";
       h1.dataset.len = "m";
-      $("#tagline").textContent = state.place
-        ? `조건에 맞는 메뉴가 없어요. ${why.join(" · ") || "설정"}을(를) 다시 확인해 주세요.`
-        : "위치와 날씨를 확인하고 있어요…";
+      $("#tagline").textContent = !state.place
+        ? "위치와 날씨를 확인하고 있어요…"
+        : nearSearching()
+          ? "주변 식당에서 파는 메뉴를 살펴보고 있어요…"
+          : state.nearOnly && state.restaurants === null
+            ? "주변 식당 정보를 불러오지 못했어요. 📍 근처 식당 메뉴만을 끄거나 위치를 다시 선택해 주세요."
+            : `조건에 맞는 메뉴가 없어요. ${why.join(" · ") || "설정"}을(를) 다시 확인해 주세요.`;
       $("#hero-chips").innerHTML = "";
       $("#hero-why").innerHTML = "";
       $("#dish-emoji").textContent = "🍚";
@@ -537,7 +598,8 @@
       `<span>${esc(m.cat)}</span>` +
       (state.kidOnly ? '<span class="kid">👶 아이 OK</span>' : "") +
       (state.lightOnly ? '<span class="light">🥗 가볍게</span>' : "") +
-      (state.drinkOnly ? '<span class="drink">🍶 반주·안주</span>' : "");
+      (state.drinkOnly ? '<span class="drink">🍶 반주·안주</span>' : "") +
+      (state.nearOnly ? '<span class="near">📍 근처 식당 메뉴</span>' : "");
     $("#hero-why").innerHTML = whyItems(r, 2);
 
     const fb = $("#btn-fav");
@@ -823,6 +885,24 @@
   }
 
 
+  function renderNearOnly() {
+    const b = $("#btn-near");
+    b.classList.toggle("on", state.nearOnly);
+    b.setAttribute("aria-pressed", String(state.nearOnly));
+    b.title = state.nearOnly ? "근처 식당 메뉴만: 켜짐 (누르면 끔)" : "지금 근처 식당에서 파는 메뉴만 추천";
+    $("#near-toggle").checked = state.nearOnly;
+  }
+
+
+  function setNearOnly(on) {
+    state.nearOnly = on;
+    saveNear(on);
+    renderNearOnly();
+    if (state.recs.length || state.place) runRecommend({ keepSelection: true });
+    toast(on ? "📍 근처 식당에서 파는 메뉴만, 가까운 곳 위주로 추천해요" : "근처 식당 메뉴만 필터를 껐어요");
+  }
+
+
   function renderMeal() {
     document.querySelectorAll("#meal-seg button").forEach((b) => b.classList.toggle("on", b.dataset.meal === state.meal));
   }
@@ -890,6 +970,8 @@
   $("#kid-toggle").addEventListener("change", (e) => setKid(e.target.checked));
   $("#light-toggle").addEventListener("change", (e) => setLight(e.target.checked));
   $("#drink-toggle").addEventListener("change", (e) => setDrink(e.target.checked));
+  $("#btn-near").addEventListener("click", () => setNearOnly(!state.nearOnly));
+  $("#near-toggle").addEventListener("change", (e) => setNearOnly(e.target.checked));
 
   $("#meal-seg").addEventListener("click", (e) => {
     const b = e.target.closest("button");
@@ -982,7 +1064,7 @@
   });
 
 
-  // 다른 탭에서 아이와 함께·가벼운 식사·반주를 바꾸면 따라감
+  // 다른 탭에서 아이와 함께·가벼운 식사·반주·근처 식당 메뉴만을 바꾸면 따라감
   window.addEventListener("storage", (e) => {
     if (e.key === KID_KEY) {
       state.kidOnly = loadKid();
@@ -993,6 +1075,9 @@
     } else if (e.key === DRINK_KEY) {
       state.drinkOnly = loadDrink();
       renderDrink();
+    } else if (e.key === NEAR_KEY) {
+      state.nearOnly = loadNear();
+      renderNearOnly();
     } else return;
     if (state.recs.length || state.place) runRecommend({ keepSelection: true });
   });
@@ -1031,6 +1116,7 @@
   renderKid();
   renderLight();
   renderDrink();
+  renderNearOnly();
   renderMeal();
   renderSky();
   renderRecs();

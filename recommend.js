@@ -96,7 +96,9 @@
    *        excludeNames:Set (추천 제외 메뉴), kidOnly:boolean (아이와 함께 — kid:false 메뉴 제외),
    *        lightOnly:boolean (가벼운 식사 — light:true 메뉴만),
    *        drinkOnly:boolean (반주·안주 — drink:true 메뉴만),
-   *        jitter:(menu)=>0~1, nearby:(menu)=>{ exact, similar } | null }
+   *        nearOnly:boolean (근처 식당 메뉴만 — nearby().exact > 0 인 메뉴만, 가까울수록 가산점),
+   *        radius:number (m, nearOnly 거리 가산점 기준),
+   *        jitter:(menu)=>0~1, nearby:(menu)=>{ exact, similar, nearest? } | null }
    * 반환: [{ menu, score, reasons:[{ kind, icon, text, pts }], basis }] 점수 내림차순
    *   reasons  추천 근거 (기여 점수 큰 순). kind 는 KINDS 의 키
    *   basis    대표 근거 { kind, label, icon } — 날씨·계절·지역 중 가장 크게 기여한 것,
@@ -113,6 +115,9 @@
       if (ctx.kidOnly && m.kid === false) continue;
       if (ctx.lightOnly && !m.light) continue;
       if (ctx.drinkOnly && !m.drink) continue;
+      // 근처 식당 메뉴만: 반경 안에 그 메뉴를 파는 식당이 확인된 메뉴만 남김
+      const near = ctx.nearby ? ctx.nearby(m) : null;
+      if (ctx.nearOnly && !(near && near.exact > 0)) continue;
       let score = 0;
       const reasons = [];
       const add = (kind, icon, text, pts) => reasons.push({ kind, icon, text, pts });
@@ -166,10 +171,17 @@
       }
 
       // 주변에 파는 식당이 있으면 가산점
-      const near = ctx.nearby ? ctx.nearby(m) : null;
       if (near && near.exact > 0) {
-        score += 2.5;
-        add("nearby", "🏠", `근처에 파는 곳 ${near.exact}곳`, 2.5);
+        let pts = 2.5;
+        let text = `근처에 파는 곳 ${near.exact}곳`;
+        // 근처 식당 메뉴만: 가장 가까운 집이 가까울수록 최대 +3
+        if (ctx.nearOnly && near.nearest != null) {
+          pts += Math.round(3 * Math.max(0, 1 - near.nearest / (ctx.radius || 1000)) * 10) / 10;
+          const min = Math.max(1, Math.round(near.nearest / 67)); // 걸음 속도 약 67m/분
+          text = `걸어서 ${min}분(${fmtDist(near.nearest)}) 거리 · 근처 ${near.exact}곳`;
+        }
+        score += pts;
+        add("nearby", "🏠", text, pts);
       } else if (near && near.similar > 0) score += 0.5;
 
       // 같은 조건에서도 매번 조금씩 다르게
@@ -258,6 +270,12 @@
     분식: ["분식"],
     아시안: ["아시아음식", "샤브샤브"],
   };
+
+
+  /** 거리 표시: 950m, 1.2km */
+  function fmtDist(m) {
+    return m < 1000 ? `${Math.round(m)}m` : `${(m / 1000).toFixed(1)}km`;
+  }
 
 
   /** 두 좌표 사이 거리(m) */
