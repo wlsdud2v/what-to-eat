@@ -4,7 +4,7 @@
   const DEFAULT_POS = { lat: 37.5663, lon: 126.9779 }; // 서울시청 (위치 권한 거부 시)
   const OVERPASS = ["https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter"];
   const NOMINATIM = "https://nominatim.openstreetmap.org";
-  const CATS = ["한식", "중식", "일식", "양식", "분식", "아시안"];
+  const CATS = ["한식", "중식", "일식", "양식", "분식", "아시안", "빵"];
 
   // 설정 저장 키 (state 를 만들 때 바로 읽으므로 state 보다 먼저 선언)
   const KID_KEY = "what-to-eat:kid-only:v1";
@@ -191,7 +191,7 @@
 
 
   async function fetchOverpass(lat, lon, radius) {
-    const q = `[out:json][timeout:25];nwr["amenity"~"^(restaurant|fast_food|food_court|pub|bar)$"]["name"](around:${radius},${lat},${lon});out center tags 400;`;
+    const q = `[out:json][timeout:25];(nwr["amenity"~"^(restaurant|fast_food|food_court|pub|bar)$"]["name"](around:${radius},${lat},${lon});nwr["shop"~"^(bakery|pastry)$"]["name"](around:${radius},${lat},${lon}););out center tags 400;`;
     let lastErr;
     for (const ep of OVERPASS) {
       try {
@@ -402,7 +402,7 @@
         return state.jitter.get(m.name);
       },
     };
-    const menus = window.allMenus(); // 기존 600종 + 직접 추가한 메뉴
+    const menus = window.allMenus(); // 기존 메뉴 + 직접 추가한 메뉴
     state.ranked = R.recommend(ctx, menus);
     // 근처 식당 메뉴만: 아직 키워드 검색 안 한 메뉴도 후보로 고를 수 있게 필터 전 순위를 따로 둠
     state.pool = state.nearOnly ? R.recommend({ ...ctx, nearOnly: false }, menus) : [];

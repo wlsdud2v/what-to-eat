@@ -6,20 +6,20 @@
  *                                 안 고른 값은 이름이 가장 비슷한 기존 메뉴(similar)에서 가져옴
  *  CustomMenus.sanitize(raw)      가져오기 등 바깥 데이터를 허용된 값만 남겨 메뉴 객체로 (안 되면 null)
  *  CustomMenus.put/remove/...     저장소 (다른 탭에서 바꿔도 storage 이벤트로 반영)
- *  allMenus()                     기존 600종 + 직접 추가한 메뉴 (추천에 넘기는 목록)
+ *  allMenus()                     기존 메뉴 + 직접 추가한 메뉴 (추천에 넘기는 목록)
  *
  * 저장 항목은 menus.js 의 메뉴 객체와 같은 모양이고 custom: true, ref(참고한 메뉴 이름), addedAt 이 더 붙습니다.
  */
 (function (root) {
   const KEY = "what-to-eat:custom-menus:v1";
-  const CATS = ["한식", "중식", "일식", "양식", "분식", "아시안"];
+  const CATS = ["한식", "중식", "일식", "양식", "분식", "아시안", "빵"];
   const TEMPS = ["hot", "cold", "neutral"];
   const SEASONS = ["spring", "summer", "autumn", "winter"];
   const WEATHER = ["rain", "snow", "hot", "cold", "chilly", "mild", "clear", "cloudy", "humid", "windy"];
   const MEALS = ["lunch", "dinner", "both"];
-  const CAT_EMOJI = { 한식: "🍚", 중식: "🥟", 일식: "🍣", 양식: "🍝", 분식: "🍢", 아시안: "🍜" };
+  const CAT_EMOJI = { 한식: "🍚", 중식: "🥟", 일식: "🍣", 양식: "🍝", 분식: "🍢", 아시안: "🍜", 빵: "🥐" };
   const CUISINE = {
-    한식: ["korean"], 중식: ["chinese"], 일식: ["japanese"], 양식: ["western"], 분식: ["korean"], 아시안: ["asian"],
+    한식: ["korean"], 중식: ["chinese"], 일식: ["japanese"], 양식: ["western"], 분식: ["korean"], 아시안: ["asian"], 빵: ["bakery"],
   };
   /** 글자 수·개수 제한 (가져오기 데이터도 같은 기준) */
   const LIMIT = { name: 30, desc: 40, emoji: 8, kw: 20, kwCount: 5, regions: 5, count: 300 };

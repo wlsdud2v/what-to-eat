@@ -6,7 +6,7 @@
   const CM = window.CustomMenus;
   const XF = window.MenuTransfer;
   const allMenus = () => window.allMenus();
-  const CATS = ["한식", "중식", "일식", "양식", "분식", "아시안", "직접 추가"];
+  const CATS = ["한식", "중식", "일식", "양식", "분식", "아시안", "빵", "직접 추가"];
 
   const TEMP_KO = { hot: "🔥 뜨거운", cold: "🧊 차가운", neutral: "🍽️ 보통" };
   const MEAL_KO = { lunch: "점심", dinner: "저녁", both: "점심·저녁" };

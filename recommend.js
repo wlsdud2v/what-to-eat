@@ -92,7 +92,7 @@
 
 
   /**
-   * 메뉴 점수 계산 (menus 를 안 넘기면 menus.js 의 600종. 직접 추가한 메뉴는 custom: true 로 함께 넘김)
+   * 메뉴 점수 계산 (menus 를 안 넘기면 menus.js 의 기본 메뉴. 직접 추가한 메뉴는 custom: true 로 함께 넘김)
    * ctx: { season, meal, tags:[], feels, region:"주소 문자열", excludeCats:Set,
    *        excludeNames:Set (추천 제외 메뉴), kidOnly:boolean (아이와 함께 — kid:false 메뉴 제외),
    *        lightOnly:boolean (가벼운 식사 — light:true 메뉴만),
@@ -185,7 +185,7 @@
         add("nearby", "🏠", text, pts);
       } else if (near && near.similar > 0) score += 0.5;
 
-      // 직접 추가한 메뉴: 600종 사이에서도 가끔 올라오도록 조금 가산
+      // 직접 추가한 메뉴: 기본 메뉴 사이에서도 가끔 올라오도록 조금 가산
       if (m.custom) {
         score += 1;
         add("mine", "✏️", "내가 추가한 메뉴", 1);
@@ -263,6 +263,7 @@
     }
 
     const cuisines = (tags.cuisine || "").toLowerCase().split(/[;,]\s*/);
+    if (tags.shop) cuisines.push(tags.shop.toLowerCase()); // OSM 빵집: shop=bakery / pastry
     if (menu.cuisine.some((c) => cuisines.includes(c))) return 1;
     return 0;
   }
@@ -276,6 +277,7 @@
     양식: ["양식", "치킨", "패스트푸드"],
     분식: ["분식"],
     아시안: ["아시아음식", "샤브샤브"],
+    빵: ["간식"], // 음식점 > 간식 > 제과,베이커리 · 도넛 등
   };
 
 
