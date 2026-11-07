@@ -257,7 +257,8 @@
   const SCORE_TOP = 12;
   function scoreCandidates() {
     if (state.source !== "kakao" || state.restaurantsLoading || !state.restaurants) return;
-    const todo = state.ranked.slice(0, SCORE_TOP).map((r) => r.menu)
+    // 화면 카드처럼 분류를 섞어 후보를 고름 (분류당 최대 4개)
+    const todo = R.pickTop(state.ranked, SCORE_TOP, 4).map((r) => r.menu)
       .filter((m) => !state.menuHits.has(m.name) && !state.menuHitsP.has(m.name));
     if (!todo.length) return;
     const gen = state.hitsGen;
@@ -306,7 +307,7 @@
         return state.jitter.get(m.name);
       },
     });
-    state.recs = state.ranked.slice(0, 6);
+    state.recs = R.pickTop(state.ranked, 6);
     if (!opts.keepSelection) state.userPicked = false;
     const keep = opts.keepSelection && state.userPicked ? state.recs.findIndex((r) => r.menu.name === prevName) : -1;
     state.selected = keep >= 0 ? keep : 0;
@@ -391,10 +392,14 @@
     }
     const cards = state.recs.map((r, i) => {
       const m = r.menu;
-      const reasons = r.reasons.slice(0, 3).map((t) => `<li>${esc(t)}</li>`).join("");
+      // 근거마다 종류 꼬리표(날씨·계절·지역·근처·끼니)를 붙여 왜 추천됐는지 바로 보이게
+      const reasons = r.reasons.slice(0, 3).map((x) =>
+        `<li class="why why-${x.kind}"><span class="tag">${x.icon} ${R.KINDS[x.kind].label}</span>${esc(x.text)}</li>`).join("");
+      const b = r.basis;
       return `<button class="rec ${i === 0 ? "top" : ""} ${i === state.selected ? "sel" : ""}" data-i="${i}">
         <span class="rank">${i === 0 ? "오늘의 추천" : `#${i + 1}`}</span>
         <span class="emoji">${m.emoji}</span>
+        <span class="basis basis-${b.kind}">${b.icon} ${esc(b.label)}</span>
         <div class="name">${esc(m.name)}</div>
         <p class="desc">${esc(m.cat)} · ${esc(m.desc)}</p>
         <ul>${reasons}</ul>

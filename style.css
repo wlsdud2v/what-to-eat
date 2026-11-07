@@ -223,8 +223,31 @@ button, select { font: inherit; cursor: pointer; }
 .rec ul { list-style: none; padding: 0; margin: 0; font-size: .78rem; display: grid; gap: 2px; }
 .rec .rank { position: absolute; top: 10px; right: 12px; font-size: .72rem; color: #5e544b; }
 
+/* 추천 근거 종류별 색 (하늘 위 유리 카드라 다크 모드에서도 같은 색) */
+.rec { --k-weather: #1c7ed6; --k-season: #e8590c; --k-region: #9c36b5; --k-nearby: #2b8a3e; --k-meal: #6f645a; --k-random: #6f645a; }
+.rec .basis {
+  justify-self: start; display: inline-block; margin-top: 6px;
+  padding: 2px 9px; border-radius: 999px;
+  font-size: .72rem; font-weight: 800; color: #fff; white-space: nowrap;
+  background: var(--kc, #6f645a);
+}
+.rec.top .basis { font-size: .8rem; padding: 3px 11px; margin-top: 0; }
+.rec .why { display: flex; gap: 6px; align-items: baseline; line-height: 1.35; }
+.rec .why .tag {
+  flex: none; padding: 0 6px; border-radius: 6px;
+  font-size: .68rem; font-weight: 700; white-space: nowrap;
+  color: var(--kc); background: color-mix(in srgb, var(--kc) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--kc) 35%, transparent);
+}
+.basis-weather, .why-weather { --kc: var(--k-weather); }
+.basis-season, .why-season { --kc: var(--k-season); }
+.basis-region, .why-region { --kc: var(--k-region); }
+.basis-nearby, .why-nearby { --kc: var(--k-nearby); }
+.basis-meal, .why-meal { --kc: var(--k-meal); }
+.basis-random { --kc: var(--k-random); }
+
 .rec.top { display: grid; grid-template-columns: auto 1fr; gap: 0 18px; align-items: center; padding: 18px 20px; }
-.rec.top .emoji { font-size: 4rem; grid-row: span 4; animation: bob 3s ease-in-out infinite; }
+.rec.top .emoji { font-size: 4rem; grid-row: span 5; animation: bob 3s ease-in-out infinite; }
 .rec.top .name { font-size: 1.6rem; }
 .rec.top .desc { font-size: .9rem; }
 .rec.top ul { font-size: .85rem; }

@@ -24,7 +24,9 @@
         if (!root.kakao?.maps?.load) return reject(new Error("카카오 SDK 로드 실패 (키·도메인 확인)"));
         root.kakao.maps.load(() => resolve());
       };
-      s.onerror = () => reject(new Error("카카오 SDK 로드 실패"));
+      // 카카오는 등록되지 않은 도메인(Referer)의 SDK 요청을 거부하고, 이때 onerror 가 납니다
+      s.onerror = () => reject(new Error(
+        `카카오 SDK 로드 실패 — Kakao Developers 에 "${location.origin}" 이 [플랫폼 키 → JavaScript 키 → JavaScript SDK 도메인]에 등록돼 있는지 확인하세요`));
       document.head.appendChild(s);
     });
     return readyP;
