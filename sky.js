@@ -35,6 +35,18 @@
     clear: "#fbf6ef", partly: "#faf6f0", hot: "#fdf3e6", cold: "#f1f6fb",
     cloudy: "#f3f3f1", fog: "#f2f3f3", rain: "#eef1f4", storm: "#eceef1", snow: "#f3f6f9",
   };
+  // 다크 모드 바탕색 (하늘 자체는 다크 모드와 무관하게 그대로)
+  const PAPER_DARK = {
+    clear: "#14181f", partly: "#15181e", hot: "#1a1714", cold: "#131820",
+    cloudy: "#16181b", fog: "#17191b", rain: "#13171b", storm: "#111317", snow: "#151a20",
+  };
+  const darkMq = window.matchMedia("(prefers-color-scheme: dark)");
+  function applyPaper() {
+    if (kind) root.style.setProperty("--bg", (darkMq.matches ? PAPER_DARK : PAPER)[kind]);
+  }
+  if (darkMq.addEventListener) darkMq.addEventListener("change", applyPaper);
+  else if (darkMq.addListener) darkMq.addListener(applyPaper);
+
   // 구름 개수와 색
   const CLOUDS = {
     clear: [0], hot: [0], cold: [1, "#ffffff", 0.5], partly: [3, "#ffffff", 0.85],
@@ -60,7 +72,7 @@
     night = n;
     el.dataset.kind = k;
     el.classList.toggle("night", n);
-    root.style.setProperty("--bg", PAPER[k]);
+    applyPaper();
     swapGradient((n ? NIGHT : DAY)[k]);
     buildClouds();
     spawn();
