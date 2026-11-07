@@ -381,6 +381,36 @@ button, select { font: inherit; cursor: pointer; }
 .map-pop-x { position: absolute; top: 2px; right: 4px; border: 0; background: none; font-size: 1rem; line-height: 1; color: #868e96; cursor: pointer; padding: 4px; }
 .map-fail { height: 100%; display: grid; place-items: center; text-align: center; padding: 16px; color: var(--muted); background: var(--bg); border-radius: 12px; font-size: .9rem; }
 
+/* 레시피 */
+.ghost-btn { border: 1px solid var(--line); background: var(--field); color: var(--ink); border-radius: 8px; padding: 5px 10px; font-size: .8rem; }
+.ghost-btn:hover { border-color: var(--accent); }
+.recipe-variants { margin-top: 10px; }
+.recipe-sites { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
+.site {
+  --sc: var(--accent);
+  display: flex; align-items: center; gap: 10px; min-width: 0;
+  padding: 12px; border-radius: 12px; text-decoration: none; color: var(--ink);
+  border: 1px solid color-mix(in srgb, var(--sc) 35%, var(--line));
+  background: color-mix(in srgb, var(--sc) 7%, var(--card));
+  transition: transform .15s, border-color .15s, background .15s;
+}
+.site:hover { transform: translateY(-2px); border-color: var(--sc); background: color-mix(in srgb, var(--sc) 14%, var(--card)); }
+.site:focus-visible { outline: 2px solid var(--sc); outline-offset: 2px; }
+.site .ico { font-size: 1.5rem; line-height: 1; flex: none; }
+.site .tx { flex: 1; min-width: 0; display: grid; }
+.site .tx b { font-size: .92rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.site .tx small { font-size: .74rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.site .go { color: var(--sc); font-weight: 800; flex: none; }
+.site-10000 { --sc: #e8590c; }
+.site-youtube { --sc: #e03131; }
+.site-naver { --sc: #03c75a; }
+.site-google { --sc: #1c7ed6; }
+.recipe-sites .empty { grid-column: 1 / -1; }
+.recipe-recent:not(:empty) { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 12px; }
+.recipe-recent .lbl { font-size: .78rem; color: var(--muted); font-weight: 600; margin-right: 2px; }
+.recipe-recent .clear { border: 0; background: none; color: var(--muted); font-size: .78rem; text-decoration: underline; padding: 2px 4px; }
+.recipes .chip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+
 /* 설정 */
 .field-label { display: block; font-size: .8rem; color: var(--muted); margin: 14px 0 6px; font-weight: 600; }
 .field-label small { font-weight: 400; }
@@ -464,6 +494,11 @@ footer { position: relative; z-index: 1; text-align: center; color: var(--muted)
   .hero { padding-bottom: 72px; }
   .places-body { grid-template-columns: minmax(0, 1fr); }
   #map { height: 300px; }
+  .recipe-sites { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .site { padding: 10px; gap: 8px; }
+  .site .ico { font-size: 1.25rem; }
+  .site .tx b { font-size: .86rem; }
+  .site .go { display: none; }
   .rec.top { padding: 16px; gap: 0 14px; }
   #sky .sky-moon { top: 70px; right: 22px; width: 54px; height: 54px; }
   #sky .sky-sun { top: -170px; right: -170px; }

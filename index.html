@@ -31,6 +31,7 @@
       <span class="brand">오늘 뭐 먹지? <span class="bowl">🍚</span></span>
       <div class="hero-links">
         <a class="hero-link" href="favorites.html">💗 좋아하는 메뉴 <span id="fav-count" class="count"></span></a>
+        <a class="hero-link" href="#recipes">🍳 레시피</a>
         <a class="hero-link" href="#settings">📍 위치·설정</a>
       </div>
     </nav>
@@ -49,7 +50,7 @@
       <div id="recs" class="recs"><div class="placeholder">위치와 날씨를 확인하고 있어요…</div></div>
       <div class="recs-actions">
         <button id="btn-reroll" class="glass-btn">🎲 다시 추천</button>
-        <span class="hint">카드를 누르면 근처 식당을, ♡ 를 누르면 좋아하는 메뉴로 등록해요</span>
+        <span class="hint">카드를 누르면 근처 식당과 레시피를, ♡ 를 누르면 좋아하는 메뉴로 등록해요</span>
       </div>
     </section>
 
@@ -68,6 +69,22 @@
         <ul id="place-list" class="place-list"></ul>
       </div>
       <p class="note" id="source-note">식당 정보는 OpenStreetMap 기준이라 누락된 곳이 있을 수 있어요. 더 많은 결과는 카카오맵·네이버지도 버튼으로 확인하세요.</p>
+    </section>
+
+    <!-- 레시피 검색 (선택한 메뉴를 따라가고, 직접 검색도 가능) -->
+    <section class="card recipes" id="recipes">
+      <div class="sec-head">
+        <h2 id="recipes-title">레시피</h2>
+        <button type="button" id="btn-recipe-menu" class="ghost-btn" hidden>↺ 추천 메뉴로</button>
+      </div>
+      <form id="recipe-form" class="search">
+        <input id="recipe-input" type="search" placeholder="요리 이름·재료로 레시피 검색 (예: 김치찌개, 두부 요리)" enterkeyhint="search" />
+        <button type="submit">검색</button>
+      </form>
+      <div class="chips recipe-variants" id="recipe-variants" role="group" aria-label="검색 방식"></div>
+      <div class="recipe-sites" id="recipe-sites"></div>
+      <div class="recipe-recent" id="recipe-recent"></div>
+      <p class="note">레시피는 각 사이트의 검색 결과를 새 탭으로 열어요.</p>
     </section>
 
     <!-- 검색·추천 설정 -->
@@ -117,6 +134,7 @@
   <script src="kakao.js"></script>
   <script src="map.js"></script>
   <script src="sky.js"></script>
+  <script src="recipes.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

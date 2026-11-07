@@ -53,6 +53,10 @@
   mapView.ready.then(() => { if (state.source) renderSource(); });
 
 
+  // ── 레시피 검색 (선택한 메뉴를 따라감) ─────────
+  const recipes = window.RecipeSearch.create();
+
+
   // ── API ─────────────────────────────────────
   async function fetchJson(url, opts) {
     const res = await fetch(url, opts);
@@ -420,6 +424,7 @@
     const list = $("#place-list");
     const rec = state.recs[state.selected];
     mapView.setPlaces([]);
+    recipes.setMenu(rec?.menu || null);
     if (!rec) {
       list.innerHTML = "";
       return;
@@ -550,6 +555,7 @@
     if (!card) return;
     state.selected = +card.dataset.i;
     state.userPicked = true;
+    recipes.setMenu(state.recs[state.selected].menu, { follow: true });
     renderRecs();
     renderPlaces();
     document.querySelector(".places").scrollIntoView({ behavior: "smooth", block: "start" });
