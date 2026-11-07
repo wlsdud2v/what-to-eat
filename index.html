@@ -30,7 +30,8 @@
     <nav class="hero-top">
       <span class="brand">오늘 뭐 먹지? <span class="bowl">🍚</span></span>
       <div class="hero-links">
-        <a class="hero-link" href="favorites.html">💗 좋아하는 메뉴 <span id="fav-count" class="count"></span></a>
+        <a class="hero-link" href="favorites.html" title="좋아하는 메뉴">💗<span class="lbl"> 좋아하는 메뉴</span> <span id="fav-count" class="count"></span></a>
+        <a class="hero-link" href="favorites.html#excluded" title="추천 제외 메뉴">🚫<span class="lbl"> 제외 메뉴</span> <span id="ex-count" class="count ex"></span></a>
         <a class="hero-link" href="#recipes">🍳 레시피</a>
         <a class="hero-link" href="#settings">📍 위치·설정</a>
       </div>
@@ -50,7 +51,8 @@
       <div id="recs" class="recs"><div class="placeholder">위치와 날씨를 확인하고 있어요…</div></div>
       <div class="recs-actions">
         <button id="btn-reroll" class="glass-btn">🎲 다시 추천</button>
-        <span class="hint">카드를 누르면 근처 식당과 레시피를, ♡ 를 누르면 좋아하는 메뉴로 등록해요</span>
+        <button id="btn-kid" class="glass-btn kid-btn" aria-pressed="false" title="아이와 함께 먹기 좋은 메뉴만 추천">👶 아이와 함께</button>
+        <span class="hint">카드를 누르면 근처 식당과 레시피를, ♡ 는 좋아하는 메뉴, 🚫 는 추천에서 빼기예요</span>
       </div>
     </section>
 
@@ -121,6 +123,16 @@
 
       <div class="field-label">음식 종류 <small>(눌러서 제외)</small></div>
       <div class="chips" id="cat-chips"></div>
+
+      <div class="field-label">함께 먹는 사람 · 제외 메뉴</div>
+      <div class="options">
+        <label class="switch">
+          <input type="checkbox" id="kid-toggle" />
+          <span class="track" aria-hidden="true"></span>
+          <span>👶 아이와 함께 <small>맵거나 날것·술안주 메뉴는 빼고 추천</small></span>
+        </label>
+        <a class="ghost-link" id="ex-link" href="favorites.html#excluded">🚫 추천 제외 메뉴 관리</a>
+      </div>
     </section>
   </main>
 

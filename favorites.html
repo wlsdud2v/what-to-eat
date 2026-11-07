@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="color-scheme" content="light dark" />
-  <title>좋아하는 메뉴 · 오늘 뭐 먹지?</title>
+  <title>내 메뉴 관리 · 오늘 뭐 먹지?</title>
   <link rel="icon" type="image/svg+xml" href="icon/icon.svg" />
   <link rel="icon" type="image/png" sizes="128x128" href="icon/icon_128.png" />
   <link rel="apple-touch-icon" href="icon/icon_512.png" />
@@ -15,14 +15,18 @@
 <body class="fav-page">
   <header class="fp-head">
     <a class="fp-back" href="./">← 오늘의 추천</a>
-    <h1>💗 좋아하는 메뉴</h1>
-    <p class="fp-sub">등록한 메뉴가 추천에 나오면 카드가 분홍색으로 강조돼요. <b id="fp-total"></b></p>
+    <h1 id="fp-title">💗 좋아하는 메뉴</h1>
+    <p class="fp-sub"><span id="fp-desc"></span> <b id="fp-total"></b></p>
+    <div class="fp-tabs" role="tablist" aria-label="내 메뉴 종류">
+      <a class="fp-tab" role="tab" href="#favorites" data-tab="fav">💗 좋아하는 메뉴 <span class="n" id="tab-fav-n"></span></a>
+      <a class="fp-tab ex" role="tab" href="#excluded" data-tab="ex">🚫 추천 제외 <span class="n" id="tab-ex-n"></span></a>
+    </div>
   </header>
 
-  <main class="fp-main">
+  <main class="fp-main" id="fp-main">
     <!-- 추가 -->
     <section class="card">
-      <div class="sec-head"><h2>메뉴 추가</h2></div>
+      <div class="sec-head"><h2 id="add-title">메뉴 추가</h2></div>
       <form id="add-form" class="search" autocomplete="off">
         <input id="add-input" type="search" placeholder="메뉴 이름 (예: 짬뽕, 마라탕, 냉면)" aria-label="추가할 메뉴 이름" />
         <button type="submit">추가</button>
@@ -33,7 +37,7 @@
     <!-- 목록 -->
     <section class="card">
       <div class="sec-head">
-        <h2>내 메뉴 <span id="fp-count" class="fp-count"></span></h2>
+        <h2><span id="list-title">내 메뉴</span> <span id="fp-count" class="fp-count"></span></h2>
         <select id="sort" title="정렬">
           <option value="recent">최근 추가순</option>
           <option value="name">이름순</option>
@@ -41,7 +45,7 @@
         </select>
       </div>
       <div class="search fp-filter">
-        <input id="filter-input" type="search" placeholder="🔍 내 메뉴에서 검색 (이름·종류)" aria-label="좋아하는 메뉴 검색" />
+        <input id="filter-input" type="search" placeholder="🔍 목록에서 검색 (이름·종류)" aria-label="목록 검색" />
       </div>
       <div class="chips fp-cats" id="cat-filter"></div>
       <ul id="fav-list" class="fp-list"></ul>

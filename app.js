@@ -26,11 +26,22 @@
     selected: 0,
     userPicked: false,  // 사용자가 카드를 직접 골랐으면 재정렬 후에도 그 메뉴 유지
     jitter: new Map(),  // 메뉴별 무작위값 (다시 추천 때만 바뀜)
+    kidOnly: loadKid(), // 👶 아이와 함께: 맵거나 날것·술안주 메뉴 빼기 (localStorage 에 기억)
   };
 
   const Fav = window.Favorites;
+  const Ex = window.Excluded;
   const $ = (sel) => document.querySelector(sel);
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+
+  const KID_KEY = "what-to-eat:kid-only:v1";
+  function loadKid() {
+    try { return localStorage.getItem(KID_KEY) === "1"; } catch { return false; }
+  }
+  function saveKid(on) {
+    try { localStorage.setItem(KID_KEY, on ? "1" : "0"); } catch { /* 저장 못 해도 이번 화면에서는 동작 */ }
+  }
 
 
   // 카카오 SDK 준비 (키 없음·도메인 미등록이면 false → OSM 사용)
@@ -306,6 +317,8 @@
       feels: ew.feels,
       region: state.place?.region || "",
       excludeCats: state.excludeCats,
+      excludeNames: Ex.names(),
+      kidOnly: state.kidOnly,
       nearby: nearbyCount,
       jitter: (m) => {
         if (!state.jitter.has(m.name)) state.jitter.set(m.name, Math.random());
@@ -392,7 +405,11 @@
   function renderRecs() {
     const box = $("#recs");
     if (!state.recs.length) {
-      box.innerHTML = '<div class="placeholder">모든 분류를 제외했어요. 아래 설정에서 음식 종류를 다시 켜 주세요.</div>';
+      const why = [];
+      if (state.excludeCats.size) why.push("음식 종류");
+      if (state.kidOnly) why.push("👶 아이와 함께");
+      if (Ex.count()) why.push("🚫 추천 제외 메뉴");
+      box.innerHTML = `<div class="placeholder">조건에 맞는 메뉴가 없어요. ${esc(why.join(" · ") || "설정")}을(를) 다시 확인해 주세요.</div>`;
       return;
     }
     const cards = state.recs.map((r, i) => {
@@ -406,13 +423,16 @@
       const favBtn = `<span class="fav-btn ${fav ? "on" : ""}" role="button" tabindex="0" aria-pressed="${fav}"
         data-fav="${esc(m.name)}" title="${fav ? "좋아하는 메뉴에서 빼기" : "좋아하는 메뉴로 등록"}"
         aria-label="${esc(m.name)} ${fav ? "좋아하는 메뉴에서 빼기" : "좋아하는 메뉴로 등록"}">${fav ? "♥" : "♡"}</span>`;
+      const exBtn = `<span class="ex-btn" role="button" tabindex="0" data-ex="${esc(m.name)}"
+        title="추천에서 빼기" aria-label="${esc(m.name)} 추천에서 빼기">🚫</span>`;
       return `<button class="rec ${i === 0 ? "top" : ""} ${i === state.selected ? "sel" : ""} ${fav ? "fav" : ""}" data-i="${i}">
         <span class="rank">${i === 0 ? "오늘의 추천" : `#${i + 1}`}</span>
         ${favBtn}
+        ${exBtn}
         <span class="emoji">${m.emoji}</span>
         <span class="basis basis-${b.kind}">${b.icon} ${esc(b.label)}</span>
         <div class="name">${esc(m.name)}${fav ? ' <span class="fav-flag">💗 내 최애</span>' : ""}</div>
-        <p class="desc">${esc(m.cat)} · ${esc(m.desc)}</p>
+        <p class="desc">${esc(m.cat)} · ${esc(m.desc)}${state.kidOnly ? ' <span class="kid-flag">👶 아이 OK</span>' : ""}</p>
         <ul>${reasons}</ul>
       </button>`;
     });
@@ -525,6 +545,23 @@
   }
 
 
+  function renderKid() {
+    const b = $("#btn-kid");
+    b.classList.toggle("on", state.kidOnly);
+    b.setAttribute("aria-pressed", String(state.kidOnly));
+    $("#kid-toggle").checked = state.kidOnly;
+  }
+
+
+  function setKid(on) {
+    state.kidOnly = on;
+    saveKid(on);
+    renderKid();
+    if (state.recs.length || state.place) runRecommend({ keepSelection: true });
+    toast(on ? "👶 아이와 함께 먹기 좋은 메뉴만 추천해요" : "아이와 함께 필터를 껐어요");
+  }
+
+
   function renderMeal() {
     document.querySelectorAll("#meal-seg button").forEach((b) => b.classList.toggle("on", b.dataset.meal === state.meal));
   }
@@ -537,11 +574,26 @@
     toast(on ? `💗 '${el.dataset.fav}'을(를) 좋아하는 메뉴로 등록했어요` : `'${el.dataset.fav}'을(를) 좋아하는 메뉴에서 뺐어요`);
   }
 
+  /** 카드의 🚫: 추천 제외 목록에 넣음 (되돌리기 가능, 좋아하는 메뉴였다면 거기서 빠짐) */
+  function excludeMenu(el) {
+    const name = el.dataset.ex;
+    const r = Ex.add(name);
+    if (!r) return;
+    const movedFromFav = r.moved;
+    toast(`🚫 '${name}'은(는) 이제 추천하지 않아요`, () => {
+      const item = Ex.remove(name);
+      if (movedFromFav) Fav.restore(movedFromFav);
+      toast(`'${item?.name || name}'을(를) 다시 추천해요`);
+    });
+  }
+
   $("#recs").addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
     const fb = e.target.closest(".fav-btn");
-    if (!fb || (e.key !== "Enter" && e.key !== " ")) return;
+    const xb = e.target.closest(".ex-btn");
+    if (!fb && !xb) return;
     e.preventDefault();
-    toggleFav(fb);
+    fb ? toggleFav(fb) : excludeMenu(xb);
   });
 
   $("#recs").addEventListener("click", (e) => {
@@ -549,6 +601,12 @@
     if (fb) {
       e.preventDefault();
       toggleFav(fb);
+      return;
+    }
+    const xb = e.target.closest(".ex-btn");
+    if (xb) {
+      e.preventDefault();
+      excludeMenu(xb);
       return;
     }
     const card = e.target.closest(".rec");
@@ -567,6 +625,8 @@
   });
 
   $("#btn-reroll").addEventListener("click", () => runRecommend({ reroll: true }));
+  $("#btn-kid").addEventListener("click", () => setKid(!state.kidOnly));
+  $("#kid-toggle").addEventListener("change", (e) => setKid(e.target.checked));
 
   $("#meal-seg").addEventListener("click", (e) => {
     const b = e.target.closest("button");
@@ -632,10 +692,13 @@
   }
 
 
-  // 좋아하는 메뉴가 바뀌면(다른 탭 포함) 카드 강조와 개수 갱신
+  // 좋아하는 메뉴·제외 메뉴가 바뀌면(다른 탭 포함) 카드 강조·추천 목록과 개수 갱신
   function renderFavCount() {
     const n = Fav.count();
+    const x = Ex.count();
     $("#fav-count").textContent = n ? String(n) : "";
+    $("#ex-count").textContent = x ? String(x) : "";
+    $("#ex-link").textContent = x ? `🚫 추천 제외 메뉴 관리 (${x}개)` : "🚫 추천 제외 메뉴 관리";
   }
 
   Fav.onChange(() => {
@@ -643,20 +706,45 @@
     renderFavCount();
   });
 
+  Ex.onChange(() => {
+    renderFavCount();
+    if (state.recs.length || state.place) runRecommend({ keepSelection: true });
+  });
+
+
+  // 다른 탭에서 아이와 함께를 바꾸면 따라감
+  window.addEventListener("storage", (e) => {
+    if (e.key !== KID_KEY) return;
+    state.kidOnly = loadKid();
+    renderKid();
+    if (state.recs.length || state.place) runRecommend({ keepSelection: true });
+  });
+
 
   let toastTimer;
-  function toast(msg) {
+  let toastUndo = null;
+  /** 알림. undo 함수를 주면 되돌리기 버튼을 붙임 */
+  function toast(msg, undo) {
     const t = $("#toast");
-    t.textContent = msg;
+    toastUndo = undo || null;
+    t.innerHTML = esc(msg) + (undo ? ' <button type="button" class="undo">되돌리기</button>' : "");
     t.classList.add("show");
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => t.classList.remove("show"), 2200);
+    toastTimer = setTimeout(() => t.classList.remove("show"), undo ? 4500 : 2200);
   }
+
+  $("#toast").addEventListener("click", (e) => {
+    if (!e.target.closest(".undo") || !toastUndo) return;
+    const fn = toastUndo;
+    toastUndo = null;
+    fn();
+  });
 
 
   // ── 시작 ────────────────────────────────────
   renderFavCount();
   renderChips();
+  renderKid();
   renderMeal();
   renderSky();
   locate();

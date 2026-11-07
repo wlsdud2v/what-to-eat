@@ -93,6 +93,7 @@
   /**
    * 메뉴 점수 계산
    * ctx: { season, meal, tags:[], feels, region:"주소 문자열", excludeCats:Set,
+   *        excludeNames:Set (추천 제외 메뉴), kidOnly:boolean (아이와 함께 — kid:false 메뉴 제외),
    *        jitter:(menu)=>0~1, nearby:(menu)=>{ exact, similar } | null }
    * 반환: [{ menu, score, reasons:[{ kind, icon, text, pts }], basis }] 점수 내림차순
    *   reasons  추천 근거 (기여 점수 큰 순). kind 는 KINDS 의 키
@@ -106,6 +107,8 @@
 
     for (const m of menus) {
       if (ctx.excludeCats && ctx.excludeCats.has(m.cat)) continue;
+      if (ctx.excludeNames && ctx.excludeNames.has(m.name)) continue;
+      if (ctx.kidOnly && m.kid === false) continue;
       let score = 0;
       const reasons = [];
       const add = (kind, icon, text, pts) => reasons.push({ kind, icon, text, pts });
