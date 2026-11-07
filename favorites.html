@@ -19,7 +19,8 @@
     <h1 id="fp-title">💗 좋아하는 메뉴</h1>
     <p class="fp-sub"><span id="fp-desc"></span> <b id="fp-total"></b></p>
     <div class="fp-tabs" role="tablist" aria-label="내 메뉴 종류">
-      <a class="fp-tab" role="tab" href="#favorites" data-tab="fav">💗 좋아하는 메뉴 <span class="n" id="tab-fav-n"></span></a>
+      <a class="fp-tab" role="tab" href="#favorites" data-tab="fav">💗 좋아하는<span class="wide"> 메뉴</span> <span class="n" id="tab-fav-n"></span></a>
+      <a class="fp-tab my" role="tab" href="#custom" data-tab="my">✏️ 직접 추가 <span class="n" id="tab-my-n"></span></a>
       <a class="fp-tab ex" role="tab" href="#excluded" data-tab="ex">🚫 추천 제외 <span class="n" id="tab-ex-n"></span></a>
     </div>
   </header>
@@ -33,6 +34,8 @@
         <button type="submit">추가</button>
       </form>
       <ul id="suggest" class="fp-suggest" aria-label="메뉴 후보"></ul>
+      <!-- 직접 추가 탭: 메뉴 정보 고르기 (안 고른 값은 비슷한 메뉴에서 가져옴) -->
+      <div id="editor" class="cm-editor" hidden></div>
     </section>
 
     <!-- 목록 -->
@@ -51,12 +54,58 @@
       <div class="chips fp-cats" id="cat-filter"></div>
       <ul id="fav-list" class="fp-list"></ul>
     </section>
+
+    <!-- 내보내기 · 가져오기 -->
+    <section class="card xfer" id="xfer">
+      <div class="sec-head"><h2>📦 내보내기 · 가져오기</h2></div>
+      <p class="hint">다른 기기로 옮기거나 친구와 나눌 수 있어요. 받는 사람은 링크를 열거나 파일·텍스트를 가져오면 돼요.</p>
+      <div class="xfer-pick" id="xfer-pick">
+        <label><input type="checkbox" value="custom" checked /> ✏️ 직접 추가 메뉴 <b id="xp-custom"></b></label>
+        <label><input type="checkbox" value="favorites" checked /> 💗 좋아하는 메뉴 <b id="xp-favorites"></b></label>
+        <label><input type="checkbox" value="excluded" /> 🚫 추천 제외 <b id="xp-excluded"></b></label>
+      </div>
+      <div class="xfer-btns">
+        <button type="button" class="pill-btn primary" id="xf-link">🔗 링크로 공유</button>
+        <button type="button" class="pill-btn soft" id="xf-copy">📋 텍스트 복사</button>
+        <button type="button" class="pill-btn soft" id="xf-file">💾 파일 저장</button>
+      </div>
+      <div class="rule"></div>
+      <div class="xfer-btns">
+        <button type="button" class="pill-btn soft" id="xf-open">📂 파일 열기</button>
+        <button type="button" class="pill-btn soft" id="xf-paste">📥 붙여넣기</button>
+        <input type="file" id="xf-input" accept=".json,application/json,text/plain" hidden />
+      </div>
+      <form id="xf-paste-form" class="xfer-paste" hidden>
+        <textarea id="xf-text" rows="4" placeholder="받은 링크나 텍스트를 붙여넣으세요" aria-label="가져올 링크나 텍스트"></textarea>
+        <button type="submit" class="pill-btn primary">가져오기</button>
+      </form>
+    </section>
   </main>
+
+  <!-- 가져오기 미리보기 -->
+  <dialog id="import-dlg" class="xfer-dlg" aria-labelledby="import-title">
+    <form method="dialog" id="import-form">
+      <h2 id="import-title">📥 메뉴 가져오기</h2>
+      <p class="hint" id="import-meta"></p>
+      <div id="import-secs" class="import-secs"></div>
+      <fieldset class="import-mode">
+        <legend>가져오는 방법</legend>
+        <label><input type="radio" name="mode" value="merge" checked /> <b>합치기</b> <small>내 메뉴는 그대로 두고 새 메뉴만 더해요</small></label>
+        <label><input type="radio" name="mode" value="replace" /> <b>바꾸기</b> <small>고른 목록을 받은 것으로 통째로 바꿔요</small></label>
+      </fieldset>
+      <div class="xfer-btns">
+        <button type="button" class="pill-btn" value="cancel" id="import-cancel">취소</button>
+        <button type="submit" class="pill-btn primary" value="ok" id="import-ok" autofocus>가져오기</button>
+      </div>
+    </form>
+  </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <script src="menus.js"></script>
+  <script src="custom-menus.js"></script>
   <script src="favorites.js"></script>
+  <script src="transfer.js"></script>
   <script src="favorites-page.js"></script>
 </body>
 </html>

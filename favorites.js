@@ -8,14 +8,14 @@
  *
  * 항목: { name, emoji, cat, custom, addedAt }
  *  - name    메뉴 이름 (menus.js 의 name 과 같으면 추천 카드에 반영)
- *  - custom  menus.js 에 없는 메뉴를 직접 추가했으면 true
+ *  - custom  menus.js 에 없는 메뉴(직접 추가한 메뉴)면 true
  * 다른 탭에서 바꿔도 storage 이벤트로 바로 반영됩니다.
  */
 (function (root) {
-  /** menus.js 에서 이름으로 메뉴 찾기 */
+  /** menus.js 와 직접 추가한 메뉴(custom-menus.js)에서 이름으로 메뉴 찾기 */
   function findMenu(name) {
     const menus = root.MENUS_DATA || root.Recommend?.MENUS || [];
-    return menus.find((m) => m.name === name) || null;
+    return menus.find((m) => m.name === name) || root.CustomMenus?.get(name) || null;
   }
 
 
@@ -79,7 +79,7 @@
           name,
           emoji: m?.emoji || extra.emoji || moved?.emoji || "🍽️",
           cat: m?.cat || extra.cat || moved?.cat || "직접 추가",
-          custom: !m,
+          custom: !m || !!m.custom,
           addedAt: extra.addedAt || Date.now(),
         });
         save();
@@ -115,6 +115,13 @@
         return true;
       },
 
+      /** 목록 통째로 바꾸기 (가져오기·되돌리기) */
+      setAll(items) {
+        const seen = new Set();
+        list = (items || []).filter((x) => x && typeof x.name === "string" && !seen.has(x.name) && seen.add(x.name));
+        save();
+      },
+
       onChange(fn) {
         listeners.add(fn);
         return () => listeners.delete(fn);
@@ -126,6 +133,16 @@
 
   const Favorites = createStore("what-to-eat:favorites:v1", { other: () => Excluded });
   const Excluded = createStore("what-to-eat:excluded:v1", { other: () => Favorites });
+
+  // 예전에 이름만 저장한 직접 추가 메뉴 → 비슷한 메뉴 정보로 채워서 추천에도 나오게
+  const CM = root.CustomMenus;
+  if (CM) {
+    for (const x of Favorites.all()) {
+      if (!x.custom || CM.has(x.name) || CM.isBuiltin(x.name)) continue;
+      const m = CM.build(x.name, { addedAt: x.addedAt });
+      if (m) CM.put(m);
+    }
+  }
 
   root.Favorites = Favorites;
   root.Excluded = Excluded;

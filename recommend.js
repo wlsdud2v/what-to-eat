@@ -35,6 +35,7 @@
     region: { label: "지역", basis: true },
     nearby: { label: "근처", basis: false },
     meal: { label: "끼니", basis: false },
+    mine: { label: "내 메뉴", basis: false },
   };
 
 
@@ -91,7 +92,7 @@
 
 
   /**
-   * 메뉴 점수 계산
+   * 메뉴 점수 계산 (menus 를 안 넘기면 menus.js 의 600종. 직접 추가한 메뉴는 custom: true 로 함께 넘김)
    * ctx: { season, meal, tags:[], feels, region:"주소 문자열", excludeCats:Set,
    *        excludeNames:Set (추천 제외 메뉴), kidOnly:boolean (아이와 함께 — kid:false 메뉴 제외),
    *        lightOnly:boolean (가벼운 식사 — light:true 메뉴만),
@@ -184,10 +185,16 @@
         add("nearby", "🏠", text, pts);
       } else if (near && near.similar > 0) score += 0.5;
 
+      // 직접 추가한 메뉴: 600종 사이에서도 가끔 올라오도록 조금 가산
+      if (m.custom) {
+        score += 1;
+        add("mine", "✏️", "내가 추가한 메뉴", 1);
+      }
+
       // 같은 조건에서도 매번 조금씩 다르게
       score += jitter(m) * 2;
 
-      // 기여 점수 큰 순 (같으면 날씨 > 계절 > 지역 > 근처 > 끼니)
+      // 기여 점수 큰 순 (같으면 날씨 > 계절 > 지역 > 근처 > 끼니 > 내 메뉴)
       const order = Object.keys(KINDS);
       reasons.sort((a, b) => b.pts - a.pts || order.indexOf(a.kind) - order.indexOf(b.kind));
 

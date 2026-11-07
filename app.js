@@ -46,6 +46,7 @@
 
   const Fav = window.Favorites;
   const Ex = window.Excluded;
+  const CM = window.CustomMenus;
   const $ = (sel) => document.querySelector(sel);
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
@@ -401,9 +402,10 @@
         return state.jitter.get(m.name);
       },
     };
-    state.ranked = R.recommend(ctx);
+    const menus = window.allMenus(); // 기존 600종 + 직접 추가한 메뉴
+    state.ranked = R.recommend(ctx, menus);
     // 근처 식당 메뉴만: 아직 키워드 검색 안 한 메뉴도 후보로 고를 수 있게 필터 전 순위를 따로 둠
-    state.pool = state.nearOnly ? R.recommend({ ...ctx, nearOnly: false }) : [];
+    state.pool = state.nearOnly ? R.recommend({ ...ctx, nearOnly: false }, menus) : [];
     state.recs = R.pickTop(state.ranked, 6);
     if (!opts.keepSelection) state.userPicked = false;
     const keep = opts.keepSelection && state.userPicked ? state.recs.findIndex((r) => r.menu.name === prevName) : -1;
@@ -596,6 +598,7 @@
       `<span class="accent">${b.icon} ${esc(b.label)}</span>` +
       `<span id="chip-near" hidden></span>` +
       `<span>${esc(m.cat)}</span>` +
+      (m.custom ? '<span class="mine">✏️ 내가 추가한 메뉴</span>' : "") +
       (state.kidOnly ? '<span class="kid">👶 아이 OK</span>' : "") +
       (state.lightOnly ? '<span class="light">🥗 가볍게</span>' : "") +
       (state.drinkOnly ? '<span class="drink">🍶 반주·안주</span>' : "") +
@@ -1060,6 +1063,11 @@
 
   Ex.onChange(() => {
     renderFavCount();
+    if (state.recs.length || state.place) runRecommend({ keepSelection: true });
+  });
+
+  // 직접 추가한 메뉴가 바뀌면(내 메뉴 관리 페이지·가져오기) 추천 다시 계산
+  CM.onChange(() => {
     if (state.recs.length || state.place) runRecommend({ keepSelection: true });
   });
 
