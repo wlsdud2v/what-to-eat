@@ -29,7 +29,10 @@
   <header class="hero">
     <nav class="hero-top">
       <span class="brand">오늘 뭐 먹지? <span class="bowl">🍚</span></span>
-      <a class="hero-link" href="#settings">📍 위치·설정</a>
+      <div class="hero-links">
+        <a class="hero-link" href="favorites.html">💗 좋아하는 메뉴 <span id="fav-count" class="count"></span></a>
+        <a class="hero-link" href="#settings">📍 위치·설정</a>
+      </div>
     </nav>
 
     <div class="hero-head">
@@ -46,7 +49,7 @@
       <div id="recs" class="recs"><div class="placeholder">위치와 날씨를 확인하고 있어요…</div></div>
       <div class="recs-actions">
         <button id="btn-reroll" class="glass-btn">🎲 다시 추천</button>
-        <span class="hint">카드를 누르면 근처 식당을 보여줘요</span>
+        <span class="hint">카드를 누르면 근처 식당을, ♡ 를 누르면 좋아하는 메뉴로 등록해요</span>
       </div>
     </section>
 
@@ -105,10 +108,12 @@
   </main>
 
   <footer id="footer">날씨 © Open-Meteo · 지도·식당 © Kakao</footer>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <script src="config.js"></script>
   <script src="menus.js"></script>
   <script src="recommend.js"></script>
+  <script src="favorites.js"></script>
   <script src="kakao.js"></script>
   <script src="map.js"></script>
   <script src="sky.js"></script>

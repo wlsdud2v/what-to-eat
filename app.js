@@ -28,6 +28,7 @@
     jitter: new Map(),  // 메뉴별 무작위값 (다시 추천 때만 바뀜)
   };
 
+  const Fav = window.Favorites;
   const $ = (sel) => document.querySelector(sel);
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
@@ -396,11 +397,17 @@
       const reasons = r.reasons.slice(0, 3).map((x) =>
         `<li class="why why-${x.kind}"><span class="tag">${x.icon} ${R.KINDS[x.kind].label}</span>${esc(x.text)}</li>`).join("");
       const b = r.basis;
-      return `<button class="rec ${i === 0 ? "top" : ""} ${i === state.selected ? "sel" : ""}" data-i="${i}">
+      const fav = Fav.has(m.name);
+      // 카드가 <button> 이라 안쪽 하트는 span(role=button)으로 둠
+      const favBtn = `<span class="fav-btn ${fav ? "on" : ""}" role="button" tabindex="0" aria-pressed="${fav}"
+        data-fav="${esc(m.name)}" title="${fav ? "좋아하는 메뉴에서 빼기" : "좋아하는 메뉴로 등록"}"
+        aria-label="${esc(m.name)} ${fav ? "좋아하는 메뉴에서 빼기" : "좋아하는 메뉴로 등록"}">${fav ? "♥" : "♡"}</span>`;
+      return `<button class="rec ${i === 0 ? "top" : ""} ${i === state.selected ? "sel" : ""} ${fav ? "fav" : ""}" data-i="${i}">
         <span class="rank">${i === 0 ? "오늘의 추천" : `#${i + 1}`}</span>
+        ${favBtn}
         <span class="emoji">${m.emoji}</span>
         <span class="basis basis-${b.kind}">${b.icon} ${esc(b.label)}</span>
-        <div class="name">${esc(m.name)}</div>
+        <div class="name">${esc(m.name)}${fav ? ' <span class="fav-flag">💗 내 최애</span>' : ""}</div>
         <p class="desc">${esc(m.cat)} · ${esc(m.desc)}</p>
         <ul>${reasons}</ul>
       </button>`;
@@ -519,7 +526,26 @@
 
 
   // ── 이벤트 ──────────────────────────────────
+  /** 카드의 하트: 좋아하는 메뉴 등록/해제 (카드 선택·스크롤은 하지 않음) */
+  function toggleFav(el) {
+    const on = Fav.toggle(el.dataset.fav);
+    toast(on ? `💗 '${el.dataset.fav}'을(를) 좋아하는 메뉴로 등록했어요` : `'${el.dataset.fav}'을(를) 좋아하는 메뉴에서 뺐어요`);
+  }
+
+  $("#recs").addEventListener("keydown", (e) => {
+    const fb = e.target.closest(".fav-btn");
+    if (!fb || (e.key !== "Enter" && e.key !== " ")) return;
+    e.preventDefault();
+    toggleFav(fb);
+  });
+
   $("#recs").addEventListener("click", (e) => {
+    const fb = e.target.closest(".fav-btn");
+    if (fb) {
+      e.preventDefault();
+      toggleFav(fb);
+      return;
+    }
     const card = e.target.closest(".rec");
     if (!card) return;
     state.selected = +card.dataset.i;
@@ -600,7 +626,30 @@
   }
 
 
+  // 좋아하는 메뉴가 바뀌면(다른 탭 포함) 카드 강조와 개수 갱신
+  function renderFavCount() {
+    const n = Fav.count();
+    $("#fav-count").textContent = n ? String(n) : "";
+  }
+
+  Fav.onChange(() => {
+    renderRecs();
+    renderFavCount();
+  });
+
+
+  let toastTimer;
+  function toast(msg) {
+    const t = $("#toast");
+    t.textContent = msg;
+    t.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove("show"), 2200);
+  }
+
+
   // ── 시작 ────────────────────────────────────
+  renderFavCount();
   renderChips();
   renderMeal();
   renderSky();

@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="color-scheme" content="light dark" />
+  <title>좋아하는 메뉴 · 오늘 뭐 먹지?</title>
+  <link rel="icon" type="image/svg+xml" href="icon/icon.svg" />
+  <link rel="icon" type="image/png" sizes="128x128" href="icon/icon_128.png" />
+  <link rel="apple-touch-icon" href="icon/icon_512.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Noto+Sans+KR:wght@400;600;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body class="fav-page">
+  <header class="fp-head">
+    <a class="fp-back" href="./">← 오늘의 추천</a>
+    <h1>💗 좋아하는 메뉴</h1>
+    <p class="fp-sub">등록한 메뉴가 추천에 나오면 카드가 분홍색으로 강조돼요. <b id="fp-total"></b></p>
+  </header>
+
+  <main class="fp-main">
+    <!-- 추가 -->
+    <section class="card">
+      <div class="sec-head"><h2>메뉴 추가</h2></div>
+      <form id="add-form" class="search" autocomplete="off">
+        <input id="add-input" type="search" placeholder="메뉴 이름 (예: 짬뽕, 마라탕, 냉면)" aria-label="추가할 메뉴 이름" />
+        <button type="submit">추가</button>
+      </form>
+      <ul id="suggest" class="fp-suggest" aria-label="메뉴 후보"></ul>
+    </section>
+
+    <!-- 목록 -->
+    <section class="card">
+      <div class="sec-head">
+        <h2>내 메뉴 <span id="fp-count" class="fp-count"></span></h2>
+        <select id="sort" title="정렬">
+          <option value="recent">최근 추가순</option>
+          <option value="name">이름순</option>
+          <option value="cat">종류순</option>
+        </select>
+      </div>
+      <div class="search fp-filter">
+        <input id="filter-input" type="search" placeholder="🔍 내 메뉴에서 검색 (이름·종류)" aria-label="좋아하는 메뉴 검색" />
+      </div>
+      <div class="chips fp-cats" id="cat-filter"></div>
+      <ul id="fav-list" class="fp-list"></ul>
+    </section>
+  </main>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="menus.js"></script>
+  <script src="favorites.js"></script>
+  <script src="favorites-page.js"></script>
+</body>
+</html>
