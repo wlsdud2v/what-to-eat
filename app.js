@@ -48,6 +48,7 @@
 
   const Fav = window.Favorites;
   const Ex = window.Excluded;
+  const Sn = window.Snoozed;
   const CM = window.CustomMenus;
   const $ = (sel) => document.querySelector(sel);
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -476,7 +477,7 @@
       feels: ew.feels,
       region: state.place?.region || "",
       excludeCats: state.excludeCats,
-      excludeNames: Ex.names(),
+      excludeNames: new Set([...Ex.names(), ...Sn.names()]), // 추천 제외 + 💤 일주일간 안 보기
       kidOnly: state.kidOnly,
       lightOnly: state.lightOnly,
       drinkOnly: state.drinkOnly,
@@ -662,6 +663,7 @@
       if (state.drinkOnly) why.push("🍶 반주·안주");
       if (state.nearOnly) why.push("📍 근처 식당 메뉴만 · 반경");
       if (Ex.count()) why.push("🚫 추천 제외 메뉴");
+      if (Sn.count()) why.push("💤 일주일간 안 보는 메뉴");
       h1.textContent = "오늘 뭐 먹지?";
       h1.dataset.len = "m";
       $("#tagline").textContent = !state.place
@@ -675,11 +677,11 @@
       $("#hero-why").innerHTML = "";
       $("#dish-emoji").textContent = "🍚";
       acts.classList.add("placeholder-copy");
-      $("#btn-fav").disabled = $("#btn-ex").disabled = true;
+      $("#btn-fav").disabled = $("#btn-ex").disabled = $("#btn-snooze").disabled = true;
       return;
     }
     acts.classList.remove("placeholder-copy");
-    $("#btn-fav").disabled = $("#btn-ex").disabled = false;
+    $("#btn-fav").disabled = $("#btn-ex").disabled = $("#btn-snooze").disabled = false;
     const m = r.menu;
     const fav = Fav.has(m.name);
 
@@ -703,6 +705,7 @@
     fb.setAttribute("aria-pressed", String(fav));
     fb.title = fb.ariaLabel = fav ? `${m.name} 좋아하는 메뉴에서 빼기` : `${m.name} 좋아하는 메뉴로 등록`;
     $("#btn-ex").title = `${m.name} 추천에서 빼기`;
+    $("#btn-snooze").title = $("#btn-snooze").ariaLabel = `${m.name} 일주일간 안 보기`;
 
     const d = dishOf(m);
     dish.dataset.type = d.type;
@@ -1056,6 +1059,55 @@
     });
   });
 
+  // 히어로의 💤: 일주일간 안 보기 (7일 뒤 저절로 다시 추천, 되돌리기 가능)
+  $("#btn-snooze").addEventListener("click", () => {
+    const name = state.recs[state.selected]?.menu.name;
+    if (!name) return;
+    const prev = Sn.all().find((x) => x.name === name) || null;
+    Sn.add(name);
+    state.changed = true;
+    toast(`💤 '${name}'은(는) ${Sn.DAYS}일 동안 추천하지 않아요`, () => {
+      Sn.remove(name);
+      if (prev) Sn.restore(prev);
+      toast(`'${name}'을(를) 다시 추천해요`);
+    });
+  });
+
+  // 설정의 💤 목록: 펼치기 / 하나씩·전부 다시 보기
+  $("#snooze-head").addEventListener("click", () => {
+    const head = $("#snooze-head");
+    const open = head.getAttribute("aria-expanded") !== "true";
+    head.setAttribute("aria-expanded", String(open));
+    renderSnooze();
+  });
+
+  $("#snooze-list").addEventListener("click", (e) => {
+    const b = e.target.closest("button");
+    if (!b) return;
+    if (b.dataset.all != null) {
+      const items = Sn.all();
+      Sn.clear();
+      toast(`💤 ${items.length}개 메뉴를 다시 추천해요`, () => items.forEach((x) => Sn.restore(x)));
+      return;
+    }
+    const item = Sn.remove(b.dataset.name);
+    if (item) toast(`'${item.name}'을(를) 다시 추천해요`, () => Sn.restore(item));
+  });
+
+  function renderSnooze() {
+    const items = Sn.all();
+    const head = $("#snooze-head");
+    const list = $("#snooze-list");
+    $("#snooze-count").textContent = items.length ? `${items.length}개` : "없음";
+    if (!items.length) head.setAttribute("aria-expanded", "false");
+    list.hidden = head.getAttribute("aria-expanded") !== "true";
+    if (list.hidden) return;
+    list.innerHTML = items.map((x) =>
+      `<li><span class="nm">${esc(x.emoji)} ${esc(x.name)}</span><span class="left">${esc(Sn.left(x))}</span>` +
+      `<button type="button" data-name="${esc(x.name)}" aria-label="${esc(x.name)} 다시 추천">다시 보기</button></li>`
+    ).join("") + (items.length > 1 ? '<li class="all"><button type="button" data-all>모두 다시 보기</button></li>' : "");
+  }
+
   $("#place-list").addEventListener("click", (e) => {
     const li = e.target.closest(".place");
     if (li) mapView.focus(li.dataset.id);
@@ -1160,6 +1212,12 @@
     if (state.recs.length || state.place) runRecommend({ keepSelection: true });
   });
 
+  // 💤 목록이 바뀌거나 기한이 지나 풀리면(다른 탭 포함) 추천 다시 계산
+  Sn.onChange(() => {
+    renderSnooze();
+    if (state.recs.length || state.place) runRecommend({ keepSelection: true });
+  });
+
   // 직접 추가한 메뉴가 바뀌면(내 메뉴 관리 페이지·가져오기) 추천 다시 계산
   CM.onChange(() => {
     if (state.recs.length || state.place) runRecommend({ keepSelection: true });
@@ -1214,6 +1272,7 @@
 
   // ── 시작 ────────────────────────────────────
   renderFavCount();
+  renderSnooze();
   renderChips();
   renderKid();
   renderLight();

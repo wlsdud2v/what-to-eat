@@ -146,4 +146,123 @@
 
   root.Favorites = Favorites;
   root.Excluded = Excluded;
+  root.Snoozed = createSnoozeStore("what-to-eat:snoozed:v1");
+
+
+  /**
+   * 💤 일주일간 안 보기 — 기한이 지나면 저절로 다시 추천되는 임시 제외 목록
+   * 항목: { name, emoji, until } (until: 다시 추천할 시각 ms)
+   * 좋아하는 메뉴·추천 제외와 따로 관리 (최애 메뉴도 잠깐 쉬었다가 돌아옴)
+   */
+  function createSnoozeStore(KEY) {
+    const DAY = 24 * 60 * 60 * 1000;
+    const listeners = new Set();
+    let timer = null;
+
+    function load() {
+      try {
+        const a = JSON.parse(localStorage.getItem(KEY) || "[]");
+        return Array.isArray(a) ? a.filter((x) => x && typeof x.name === "string" && x.until > Date.now()) : [];
+      } catch {
+        return [];
+      }
+    }
+
+    function save() {
+      try {
+        localStorage.setItem(KEY, JSON.stringify(list));
+      } catch (e) {
+        console.warn(`[${KEY}] 저장 실패:`, e.message);
+      }
+      emit();
+    }
+
+    function emit() {
+      schedule();
+      listeners.forEach((fn) => fn(list.slice()));
+    }
+
+    /** 기한 지난 항목 정리. 하나라도 지웠으면 true */
+    function prune() {
+      const n = list.length;
+      list = list.filter((x) => x.until > Date.now());
+      if (list.length === n) return false;
+      save();
+      return true;
+    }
+
+    /** 가장 먼저 풀리는 시각에 맞춰 정리 예약 (화면을 켜 둔 채 기한이 지나도 바로 다시 추천) */
+    function schedule() {
+      clearTimeout(timer);
+      if (!list.length) return;
+      const next = Math.min(...list.map((x) => x.until));
+      timer = setTimeout(prune, Math.min(Math.max(next - Date.now(), 0) + 500, 2 ** 31 - 1));
+    }
+
+    let list = load();
+    schedule();
+
+    root.addEventListener?.("storage", (e) => {
+      if (e.key !== KEY) return;
+      list = load();
+      emit();
+    });
+
+    // 잠자기·백그라운드에서 타이머가 늦어질 수 있어 화면이 다시 보일 때도 정리
+    root.document?.addEventListener("visibilitychange", () => { if (!root.document.hidden) prune(); });
+
+    const api = {
+      DAYS: 7,
+      all: () => (prune(), list.slice()),
+      count: () => (prune(), list.length),
+      has: (name) => list.some((x) => x.name === name && x.until > Date.now()),
+      names: () => new Set(list.filter((x) => x.until > Date.now()).map((x) => x.name)),
+
+      /** days 일 동안 추천에서 빼기 (이미 있으면 기한만 새로) */
+      add(name, days = api.DAYS) {
+        name = String(name || "").trim();
+        if (!name) return false;
+        const m = findMenu(name);
+        list = list.filter((x) => x.name !== name);
+        list.unshift({ name, emoji: m?.emoji || "🍽️", until: Date.now() + days * DAY });
+        save();
+        return true;
+      },
+
+      /** 바로 다시 추천. 지운 항목을 돌려줌 (되돌리기용) */
+      remove(name) {
+        const i = list.findIndex((x) => x.name === name);
+        if (i < 0) return null;
+        const [item] = list.splice(i, 1);
+        save();
+        return item;
+      },
+
+      restore(item) {
+        if (!item || item.until <= Date.now()) return;
+        list = list.filter((x) => x.name !== item.name);
+        list.push(item);
+        list.sort((a, b) => a.until - b.until);
+        save();
+      },
+
+      clear() {
+        list = [];
+        save();
+      },
+
+      /** 남은 기간 글자: "3일 남음", "5시간 남음" */
+      left(item) {
+        const ms = item.until - Date.now();
+        if (ms >= DAY) return `${Math.ceil(ms / DAY)}일 남음`;
+        return `${Math.max(1, Math.ceil(ms / 3600000))}시간 남음`;
+      },
+
+      onChange(fn) {
+        listeners.add(fn);
+        return () => listeners.delete(fn);
+      },
+    };
+    return api;
+  }
 })(window);

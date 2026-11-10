@@ -115,6 +115,9 @@
         <button type="button" class="round-btn soft" id="btn-ex" aria-label="이 메뉴 추천에서 빼기" title="이 메뉴 추천에서 빼기">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8" /><path d="M6.5 6.5l11 11" /></svg>
         </button>
+        <button type="button" class="round-btn soft" id="btn-snooze" aria-label="이 메뉴 일주일간 안 보기" title="이 메뉴 일주일간 안 보기">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z" /><path d="M14 4h4l-4 4h4" /></svg>
+        </button>
         <a class="pill-btn primary" href="#places" id="btn-places">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12a7 7 0 1 0 14 0" /><path d="M12 5v7" /><path d="M3 12h18" /></svg>
           주변 식당 보기
@@ -247,6 +250,14 @@
         <input type="checkbox" id="drink-toggle" />
         <span class="track" aria-hidden="true"></span>
       </label>
+      <div class="row col snooze-row" id="snooze-row">
+        <button type="button" class="row-label snooze-head" id="snooze-head" aria-expanded="false" aria-controls="snooze-list">
+          <span>💤 일주일간 안 보는 메뉴 <small>7일이 지나면 다시 추천해요</small></span>
+          <span class="row-val"><span id="snooze-count">없음</span>
+            <svg class="chev" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg></span>
+        </button>
+        <ul class="snooze-list" id="snooze-list" hidden></ul>
+      </div>
       <a class="row link-row" id="ex-link" href="favorites.html#excluded">
         <span class="row-label">추천 제외 메뉴</span>
         <span class="row-val"><span id="ex-count">없음</span>
