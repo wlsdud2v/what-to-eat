@@ -99,7 +99,8 @@
    *        drinkOnly:boolean (반주·안주 — drink:true 메뉴만),
    *        nearOnly:boolean (근처 식당 메뉴만 — nearby().exact > 0 인 메뉴만, 가까울수록 가산점),
    *        radius:number (m, nearOnly 거리 가산점 기준),
-   *        jitter:(menu)=>0~1, nearby:(menu)=>{ exact, similar, nearest? } | null }
+   *        jitter:(menu)=>0~1, nearby:(menu)=>{ exact, similar, nearest? } | null,
+   *        history:[{ name, cat, daysAgo }] (최근 추천 기록, 최근 순 — 며칠 안에 나온 메뉴·분류 감점) }
    * 반환: [{ menu, score, reasons:[{ kind, icon, text, pts }], basis }] 점수 내림차순
    *   reasons  추천 근거 (기여 점수 큰 순). kind 는 KINDS 의 키
    *   basis    대표 근거 { kind, label, icon } — 날씨·계절·지역 중 가장 크게 기여한 것,
@@ -109,6 +110,7 @@
     menus = menus || MENUS;
     const jitter = ctx.jitter || Math.random;
     const results = [];
+    const { byName: recentPts, byCat: recentCatPts } = recentPenalties(ctx.history);
 
     for (const m of menus) {
       if (ctx.excludeCats && ctx.excludeCats.has(m.cat)) continue;
@@ -191,8 +193,12 @@
         add("mine", "✏️", "내가 추가한 메뉴", 1);
       }
 
-      // 같은 조건에서도 매번 조금씩 다르게
-      score += jitter(m) * 2;
+      // 최근에 추천된 메뉴·분류는 감점 (같은 위치·날씨여도 날마다 다른 메뉴가 올라오게)
+      score += (recentPts.get(m.name) || 0) + (recentCatPts.get(m.cat) || 0);
+
+      // 같은 조건에서도 매번 다르게: 굼벨 잡음을 더하고 점수 순으로 정렬하면
+      // 점수가 높을수록 자주, 낮아도 가끔은 올라오는 확률 뽑기(소프트맥스)가 됨
+      score += gumbel(jitter(m));
 
       // 기여 점수 큰 순 (같으면 날씨 > 계절 > 지역 > 근처 > 끼니 > 내 메뉴)
       const order = Object.keys(KINDS);
@@ -203,6 +209,42 @@
 
     results.sort((a, b) => b.score - a.score);
     return results;
+  }
+
+
+  /** 며칠 전에 나온 메뉴인지 → 감점 (0: 오늘 다른 끼니) */
+  const RECENT_NAME = [-6, -5, -3, -2, -1, -1, -1];
+  /** 최근 몇 번의 추천을 보고 분류 감점 (같은 분류가 연달아 나오지 않게) */
+  const RECENT_CAT_LOOKBACK = 3;
+  const RECENT_CAT_STEP = -0.75;
+  const RECENT_CAT_MAX = -2;
+
+
+  /** 최근 기록 → 메뉴별·분류별 감점 Map */
+  function recentPenalties(history) {
+    const byName = new Map();
+    const byCat = new Map();
+    if (!history || !history.length) return { byName, byCat };
+    for (const h of history) {
+      const pts = RECENT_NAME[h.daysAgo];
+      if (pts != null) byName.set(h.name, Math.min(byName.get(h.name) || 0, pts));
+    }
+    for (const h of history.slice(0, RECENT_CAT_LOOKBACK)) {
+      if (!h.cat) continue;
+      byCat.set(h.cat, Math.max(RECENT_CAT_MAX, (byCat.get(h.cat) || 0) + RECENT_CAT_STEP));
+    }
+    return { byName, byCat };
+  }
+
+
+  /**
+   * 무작위값(0~1) → 굼벨 잡음 (온도 2, −2 ~ +8 로 자름)
+   * 평균은 약 +1.2 로 예전 0~2 무작위와 비슷하지만 가끔 크게 튀어서 상위권 순서가 자주 바뀜
+   */
+  const NOISE_T = 2;
+  function gumbel(u) {
+    const x = Math.min(Math.max(u, 1e-6), 1 - 1e-6);
+    return Math.min(8, Math.max(-2, -NOISE_T * Math.log(-Math.log(x))));
   }
 
 

@@ -49,6 +49,7 @@
   const Fav = window.Favorites;
   const Ex = window.Excluded;
   const Sn = window.Snoozed;
+  const Hist = window.MenuHistory;
   const CM = window.CustomMenus;
   const $ = (sel) => document.querySelector(sel);
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -491,6 +492,7 @@
         if (!state.jitter.has(m.name)) state.jitter.set(m.name, Math.random());
         return state.jitter.get(m.name);
       },
+      history: Hist.recent(state.meal, now), // 최근 며칠 추천된 메뉴·분류 감점
     };
     const menus = window.allMenus(); // 기존 메뉴 + 직접 추가한 메뉴
     state.ranked = R.recommend(ctx, menus);
@@ -502,6 +504,7 @@
     const next = keep >= 0 ? keep : 0;
     state.changed = state.recs[next]?.menu.name !== prevName;
     state.selected = next;
+    Hist.record(state.recs[next]?.menu, state.meal, now);
     renderSky();
     renderContext();
     renderRecs();
@@ -1014,6 +1017,7 @@
     state.changed = i !== state.selected;
     state.selected = i;
     state.userPicked = true;
+    Hist.record(state.recs[i].menu, state.meal);
     recipes.setMenu(state.recs[i].menu, { follow: true });
     renderSky();
     renderRecs();

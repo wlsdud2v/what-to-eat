@@ -73,6 +73,7 @@ python3 -m http.server 8000
 | `recipes.js` | 레시피 검색 `RecipeSearch` (선택 메뉴 따라가기, 직접 검색, 검색 방식 칩, 사이트 링크, 최근 검색) |
 | `custom-menus.js` | 직접 추가 메뉴 저장소 `CustomMenus` (`build`: 이름 + 고른 값, 나머지는 비슷한 메뉴 `similar()` 에서 / `sanitize`: 허용된 값만 남기기 / `put`·`remove`·`restore`·`setAll`·`onChange`) 와 `allMenus()`(646종 + 직접 추가 메뉴) |
 | `transfer.js` | 내보내기·가져오기 `MenuTransfer` (`build`·`toLink`·`parse`·`validate`·`preview`·`apply`·`restore`) |
+| `history.js` | 최근 추천 기록 `MenuHistory` (`record`: 날짜·끼니마다 히어로 메뉴 하나, `recent`: 며칠 전인지 붙여 최근 순) — 반복 추천 감점용 |
 | `favorites.js` | 내 메뉴 저장소 `Favorites`(좋아하는 메뉴)·`Excluded`(추천 제외) (`localStorage`, `add`·`remove`·`restore`·`toggle`·`has`·`names`·`onChange`, 서로 겹치지 않게 자동으로 옮김), `Snoozed`(💤 일주일간 안 보기 — 항목마다 `until` 시각, 지나면 자동으로 빠지고 `onChange` 알림) |
 | `favorites.html` · `favorites-page.js` | 내 메뉴 관리 페이지 (좋아하는 메뉴·직접 추가·추천 제외 탭, 추가·고치기·삭제·옮기기·검색·정렬, 내보내기·가져오기) |
 | `app.js` | 위치·날씨·식당 검색 흐름, 렌더링과 이벤트 (지도는 `MapView` 로만 다룸) |
@@ -102,7 +103,15 @@ python3 -m http.server 8000
 | 반경 안에 이름이 일치하는 식당 있음 / 분류만 일치 | +2.5 / +0.5 |
 | 📍 근처 식당 메뉴만일 때, 가장 가까운 메뉴 일치 식당 거리 | 0 ~ +3 (가까울수록, 반경 끝이면 0) |
 | ✏️ 직접 추가한 메뉴 (`custom: true`, 근거 꼬리표 `내 메뉴`) | +1 |
-| 무작위 (🎲 다시 추천 때만 바뀜) | 0 ~ 2 |
+| 최근 추천된 메뉴 (오늘 다른 끼니 / 1일 / 2일 / 3일 / 4~6일 전) | −6 / −5 / −3 / −2 / −1 |
+| 최근 3번 추천에 같은 분류 (번마다) | −0.75 (최대 −2) |
+| 무작위 굼벨 잡음 (온도 2, 🎲 다시 추천 때만 바뀜) | −2 ~ +8 (평균 약 +1.2) |
+
+**다양하게 추천하기** — 같은 위치·날씨면 확정 점수가 매일 같아서 예전에는 같은 메뉴가 반복됐습니다. 두 가지로 섞습니다.
+
+- **최근 기록 감점** (`history.js` 의 `MenuHistory`) — 날짜·끼니마다 마지막으로 히어로에 보인 메뉴 하나를 `localStorage`(`what-to-eat:history:v1`)에 14일간 기억하고, `recommend()` 의 `ctx.history` 로 넘겨 위 표대로 감점합니다. 지금 끼니 기록은 빼서 10분 새로 고침 때 보고 있는 메뉴가 스스로 밀려나지 않습니다.
+- **굼벨 잡음** — 점수에 굼벨 잡음을 더해 정렬하면 소프트맥스 확률 뽑기와 같아서, 점수 높은 메뉴가 자주 나오되 상위권 순서가 매번 바뀝니다. `pickTop()` 은 그대로 점수 순입니다.
+- 같은 조건(종로·가을·쌀쌀·점심)으로 14일을 돌려 보면 1위 메뉴가 6종(기름떡볶이 7번) → 13종으로 늘었습니다.
 
 점수를 매기기 전에 제외 분류, 🚫 추천 제외 메뉴와 💤 일주일간 안 보는 메뉴(둘 다 `excludeNames`), 👶 아이와 함께일 때 `kid: false` 메뉴(`kidOnly`)는 후보에서 빼고, 🥗 가벼운 식사일 때는 `light: true` 메뉴(`lightOnly`)만, 🍶 반주·안주일 때는 `drink: true` 메뉴(`drinkOnly`)만 남깁니다. 📍 근처 식당 메뉴만(`nearOnly`)일 때는 반경 안에 그 메뉴를 파는 식당(메뉴 일치)이 확인된 메뉴만 남깁니다.
 
@@ -215,4 +224,4 @@ python3 -m http.server 8000
 
 ## 다음 단계 아이디어
 
-- 최근 먹은 메뉴를 `localStorage` 에 저장해 중복 추천 감점.
+- 최근 기록 화면에서 "실제로 먹은 메뉴"를 직접 고치기.
