@@ -23,7 +23,8 @@
     override: "",
     radius: 1000,
     excludeCats: new Set(),
-    restaurants: [],    // 반경 안 음식점 풀 (카카오: 가까운 순 최대 45곳)
+    placesOn: false,    // 사용자가 「주변 식당 보기」를 눌렀을 때만 식당을 조회 (그전엔 검색 안 함)
+    restaurants: undefined, // 반경 안 음식점 풀 (카카오: 가까운 순 최대 45곳). undefined: 아직 조회 안 함, null: 실패
     restaurantsLoading: false,
     source: "kakao",    // "kakao" | "osm" (카카오 키가 없거나 실패하면 osm)
     menuHits: new Map(),  // 메뉴 이름 → 카카오 키워드 검색 결과 { items, total, complete, pages, failed? }
@@ -220,8 +221,11 @@
     const id = ++reqId;
     state.lat = lat;
     state.lon = lon;
-    state.restaurants = [];
-    state.restaurantsLoading = true;
+    state.restaurants = undefined;
+    state.restaurantsLoading = state.placesOn;
+    state.hitsGen++;
+    state.menuHits = new Map();
+    state.menuHitsP = new Map();
     mapView.setUser(lat, lon);
     mapView.setView(lat, lon, state.radius > 1000 ? 14 : 15);
     setPlace("위치 확인 중…");
@@ -229,7 +233,7 @@
 
     const placeP = reverseGeocode(lat, lon).catch(() => ({ label: `${lat.toFixed(4)}, ${lon.toFixed(4)}`, region: "", area: "" }));
     const weatherP = fetchWeather(lat, lon).catch(() => null);
-    loadRestaurants(id);
+    if (state.placesOn) loadRestaurants(id); // 주변 식당은 사용자가 원했을 때만
 
     const [place, weather] = await Promise.all([placeP, weatherP]);
     if (id !== reqId) return;
@@ -354,6 +358,21 @@
   window.addEventListener("pageshow", (e) => { if (e.persisted) refreshData(); }); // 뒤로 가기 캐시에서 복원
 
 
+  /** 「주변 식당 보기」·「지금 갈 수 있는 곳」: 이때 처음 식당을 조회하고 지도·목록을 펼침 */
+  function openPlaces() {
+    const sec = $("#places");
+    if (!state.placesOn) {
+      state.placesOn = true;
+      state.userPicked = true; // 식당 수가 추천 순위에 반영돼도 지금 보던 메뉴는 그대로
+      sec.hidden = false;
+      mapView.refresh();
+      if (state.lat != null) loadRestaurants();
+      else renderPlaces();
+    }
+    sec.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+
   /** 날씨 직접 선택 시 태그와 체감온도 대체 */
   function effectiveWeather() {
     const w = state.weather || { temp: 15, feels: 15, humidity: 50, wind: 5, weatherCode: 2 };
@@ -404,7 +423,7 @@
   const SCORE_TOP = 12;
   const NEAR_PROBE_MAX = 72; // 근처 식당 메뉴만: 위치·반경당 키워드 검색 최대 메뉴 수
   function scoreCandidates() {
-    if (state.source !== "kakao" || state.restaurantsLoading || !state.restaurants) return;
+    if (!state.placesOn || state.source !== "kakao" || state.restaurantsLoading || !state.restaurants) return;
     const unknown = (m) => !state.menuHits.has(m.name) && !state.menuHitsP.has(m.name);
     let todo;
     if (state.nearOnly) {
@@ -812,7 +831,10 @@
     const h = state.source === "kakao" ? state.menuHits.get(m.name) : null;
     const n = state.restaurants === null ? null : nearbyCount(m);
     const waiting = state.restaurantsLoading || (state.source === "kakao" && !h);
-    if (state.restaurants === null) {
+    if (!state.placesOn) {
+      num.textContent = "🔍";
+      text.textContent = `걸어서 ${walk}분 안에\n${short} 파는 곳 찾아보기`;
+    } else if (state.restaurants === null) {
       num.textContent = "?";
       text.textContent = "식당 정보를 불러오지 못했어요.\n지도 버튼으로 찾아보세요.";
     } else if (waiting || !n) {
@@ -826,7 +848,7 @@
       text.textContent = n.similar ? `${short} 파는 곳은 없지만\n비슷한 식당이 ${n.similar}곳 있어요` : `걸어서 ${walk}분 안에는\n${short} 파는 곳이 없어요`;
     }
     if (chip) {
-      const show = !waiting && n && n.exact > 0;
+      const show = state.placesOn && !waiting && n && n.exact > 0;
       chip.hidden = !show;
       if (show) chip.textContent = `근처 ${n.exact}곳`;
     }
@@ -843,6 +865,7 @@
       list.innerHTML = "";
       return;
     }
+    if (!state.placesOn) return; // 아직 식당 조회를 원하지 않음
     const m = rec.menu;
     const short = m.name.split("·")[0].trim();
     $("#places-title").textContent = short.length <= 4 && !short.includes(" ") ? `주변 ${short}집` : `${short} 먹을 수 있는 곳`;
@@ -852,7 +875,7 @@
       `<a href="https://map.kakao.com/link/search/${kq}" target="_blank" rel="noopener">카카오맵</a>` +
       `<a href="https://map.naver.com/p/search/${kq}" target="_blank" rel="noopener">네이버지도</a>`;
 
-    if (state.restaurantsLoading) {
+    if (state.restaurantsLoading || state.restaurants === undefined) {
       list.innerHTML = '<li class="empty">주변 식당을 찾는 중…</li>';
       return;
     }
@@ -1112,6 +1135,14 @@
     ).join("") + (items.length > 1 ? '<li class="all"><button type="button" data-all>모두 다시 보기</button></li>' : "");
   }
 
+  // 주변 식당은 버튼을 눌렀을 때만 조회. 주소창에 #places 를 남기지 않아 새로고침해도 추천 메뉴부터 보임
+  for (const sel of ["#btn-places", "#near"]) {
+    $(sel).addEventListener("click", (e) => {
+      e.preventDefault();
+      openPlaces();
+    });
+  }
+
   $("#place-list").addEventListener("click", (e) => {
     const li = e.target.closest(".place");
     if (li) mapView.focus(li.dataset.id);
@@ -1150,7 +1181,7 @@
   $("#radius").addEventListener("change", (e) => {
     state.radius = +e.target.value;
     mapView.setRadius(state.radius);
-    if (state.lat != null) loadRestaurants();
+    if (state.lat != null && state.placesOn) loadRestaurants();
   });
 
   // 아래 내비의 돋보기: 위치 검색칸으로
@@ -1275,6 +1306,10 @@
 
 
   // ── 시작 ────────────────────────────────────
+  // 처음 들어오면 항상 추천 메뉴(맨 위)부터. 예전 #places 주소·브라우저 스크롤 복원 때문에 아래로 가 있지 않게
+  if ("scrollRestoration" in history) history.scrollRestoration = "manual";
+  if (location.hash === "#places") history.replaceState(null, "", location.pathname + location.search);
+  if (!location.hash) window.scrollTo(0, 0);
   renderFavCount();
   renderSnooze();
   renderChips();

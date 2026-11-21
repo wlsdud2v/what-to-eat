@@ -9,6 +9,7 @@
  *   view.setRadius(m)
  *   view.setPlaces([{ id, lat, lon, strong, html }])   // strong: 메뉴 일치(큰 주황 점)
  *   view.focus(id)                                      // 확대 + 말풍선 열기
+ *   view.refresh()                                      // 숨겨 뒀던 지도를 보이게 한 뒤 크기 다시 계산
  *   view.kind                                           // "kakao" | "leaflet" | null(준비 중)
  *
  * 지도가 준비되기 전에 부른 메서드는 마지막 값만 기억했다가 준비되면 한 번에 반영합니다.
@@ -88,6 +89,7 @@
     }
 
     return {
+      refresh() { map.relayout(); },
       setView(lat, lon, zoom) {
         map.setLevel(toLevel(zoom));
         map.setCenter(ll(lat, lon));
@@ -143,6 +145,7 @@
     let markers = new Map();
 
     return {
+      refresh() { map.invalidateSize(); },
       setView(lat, lon, zoom) { map.setView([lat, lon], zoom); },
       setUser(lat, lon) { user.setLatLng([lat, lon]); circle.setLatLng([lat, lon]); },
       setRadius(r) { circle.setRadius(r); },
@@ -183,6 +186,8 @@
       setRadius(r) { s.radius = r; impl?.setRadius(r); },
       setPlaces(list) { s.places = list; impl?.setPlaces(list); },
       focus(pid) { impl?.focus(pid); },
+      // 숨긴 상태로 만든 지도는 보이게 한 다음 프레임에 크기를 다시 잡고 중심을 맞춤
+      refresh() { requestAnimationFrame(() => { if (!impl) return; impl.refresh(); impl.setView(s.view.lat, s.view.lon, s.view.zoom); }); },
     };
 
     view.ready = Promise.resolve(kakaoReady)
